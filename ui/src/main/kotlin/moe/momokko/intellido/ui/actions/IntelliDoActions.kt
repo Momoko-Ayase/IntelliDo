@@ -9,6 +9,7 @@ import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
+import moe.momokko.intellido.browser.IsolatedBrowserProfiles
 import moe.momokko.intellido.browser.JcefDiagnostics
 import moe.momokko.intellido.platform.catalog.DirectoryKind
 import moe.momokko.intellido.platform.i18n.IntelliDoStrings
@@ -145,7 +146,10 @@ class ResetLocalDataAction : AnAction() {
         val prefs = IntelliDoStartup.preferenceFile()
         val workspace = IntelliDoWorkspace.directory()
         val logs = Path.of(PathManager.getLogPath())
-        val caches = listOf(Path.of(PathManager.getSystemPath(), "intellido-media"))
+        val caches = listOf(
+            Path.of(PathManager.getSystemPath(), "intellido-media"),
+            Path.of(PathManager.getSystemPath(), IsolatedBrowserProfiles.DEFAULT_CACHE_DIR),
+        )
         val preview = LocalDataReset.preview(browser, prefs, workspace, logs, caches)
         val body = buildString {
             append(IntelliDoStrings.message("reset.body", locale))

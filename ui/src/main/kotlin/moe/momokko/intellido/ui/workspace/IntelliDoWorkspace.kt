@@ -63,7 +63,7 @@ object IntelliDoWorkspace {
     fun openOrFocus(): Project? {
         val existing = ProjectManager.getInstance().openProjects.firstOrNull()
         if (existing != null) {
-            configure(existing)
+            bringToFront(existing)
             return existing
         }
         return open()
@@ -190,6 +190,9 @@ object IntelliDoWorkspace {
     }
 
     fun saveAttachment(project: Project, url: String) {
+        if (!Attachments.isAttachmentUrl(url)) {
+            return
+        }
         val runtime = service<IntelliDoRuntime>()
         val locale = runtime.locale
         val name = Attachments.suggestedName(url)

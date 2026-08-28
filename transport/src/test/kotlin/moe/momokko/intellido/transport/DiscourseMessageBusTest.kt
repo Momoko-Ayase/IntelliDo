@@ -80,6 +80,19 @@ class DiscourseMessageBusTest {
     }
 
     @Test
+    fun `poison presence users are skipped instead of crashing the poller`() {
+        val json = """
+            [
+              {"global_id":1,"message_id":1,"channel":"/presence/discourse-presence/reply/101","data":{"entering_users":[{"id":0,"username":""},{"id":"x","username":"bad"},{"id":2,"username":"helper"}]}}
+            ]
+        """.trimIndent()
+        val presence = DiscourseMessageBus.events(DiscourseMessageBus.parse(json))
+            .filterIsInstance<GuestLiveEvent.TopicPresence>()
+            .single()
+        assertEquals(listOf("helper"), presence.entering.map { it.username })
+    }
+
+    @Test
     fun `empty long-poll is a valid idle payload`() {
         assertEquals(emptyList<MessageBusFrame>(), DiscourseMessageBus.parse("[]"))
         assertEquals(emptyList<GuestLiveEvent>(), DiscourseMessageBus.events(emptyList()))

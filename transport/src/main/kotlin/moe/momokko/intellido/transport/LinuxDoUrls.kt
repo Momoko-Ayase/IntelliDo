@@ -7,7 +7,11 @@ object LinuxDoUrls {
     const val ORIGIN: String = "https://linux.do"
 
     fun absolute(path: String): String =
-        if (path.startsWith("http")) path else ORIGIN + if (path.startsWith("/")) path else "/$path"
+        if (path.startsWith("https://") || path.startsWith("http://")) {
+            path
+        } else {
+            ORIGIN + if (path.startsWith("/")) path else "/$path"
+        }
 
     fun latest(page: Int = 0): String = paged("/latest.json", page)
 

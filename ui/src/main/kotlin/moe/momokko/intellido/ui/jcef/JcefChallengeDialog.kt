@@ -1,5 +1,6 @@
 package moe.momokko.intellido.ui.jcef
 
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.wm.WindowManager
@@ -10,8 +11,6 @@ import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import moe.momokko.intellido.browser.CloudflareChallenge
-import org.cef.browser.CefBrowser
-import org.cef.handler.CefLoadHandlerAdapter
 import moe.momokko.intellido.platform.i18n.IntelliDoStrings
 import moe.momokko.intellido.transport.LinuxDoUrls
 import java.awt.BorderLayout
@@ -39,7 +38,14 @@ class JcefChallengeDialog(
         } else {
             ApplicationManager.getApplication().invokeLater(show)
         }
-        result.get(5, TimeUnit.MINUTES)
+        try {
+            result.get(5, TimeUnit.MINUTES)
+        } catch (error: Exception) {
+            ApplicationManager.getApplication().invokeLater {
+                result.completeExceptionally(error)
+            }
+            throw error
+        }
     }
 
     private fun open(result: CompletableFuture<Boolean>) {
@@ -49,7 +55,6 @@ class JcefChallengeDialog(
             .setOffScreenRendering(false)
             .setUrl(page)
             .build()
-        browser.setOpenLinksInExternalBrowser(false)
         val query = JBCefJSQuery.create(browser as JBCefBrowserBase)
         val done = AtomicBoolean(false)
         val sawTurnstile = AtomicBoolean(false)
@@ -57,8 +62,6 @@ class JcefChallengeDialog(
         val dialog = JDialog(owner, IntelliDoStrings.message("challenge.title", locale), true)
         dialog.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
 
-        // Explain why an unexpected verification window appeared, and offer an
-        // explicit way out instead of only the window close button.
         val root = JPanel(BorderLayout())
         val explain = JBLabel(IntelliDoStrings.message("challenge.body", locale))
         explain.border = JBUI.Borders.empty(12, 16)
@@ -73,16 +76,51 @@ class JcefChallengeDialog(
         dialog.contentPane = root
         dialog.size = Dimension(JBUI.scale(560), JBUI.scale(760))
         dialog.setLocationRelativeTo(owner)
+
+        JcefBrowserGuards.install(
+            browser,
+            onExternal = { BrowserUtil.browse(it) },
+            onConfirm = { url ->
+                val ok = javax.swing.JOptionPane.showConfirmDialog(
+                    dialog,
+                    url,
+                    IntelliDoStrings.message("browse.openExternal", locale),
+                    javax.swing.JOptionPane.YES_NO_OPTION,
+                    javax.swing.JOptionPane.WARNING_MESSAGE,
+                ) == javax.swing.JOptionPane.YES_OPTION
+                if (ok) {
+                    BrowserUtil.browse(url)
+                }
+            },
+            nativeStaysInCef = true,
+        )
+
+        fun finish(passed: Boolean) {
+            if (!done.compareAndSet(false, true)) {
+                return
+            }
+            if (passed) {
+                result.complete(true)
+            } else {
+                result.completeExceptionally(IllegalStateException("cancelled"))
+            }
+            ApplicationManager.getApplication().invokeLater {
+                if (dialog.isDisplayable) {
+                    dialog.dispose()
+                }
+            }
+        }
+
         query.addHandler { payload ->
             val probe = CloudflareChallenge.parsePageProbe(payload)
             if (probe.turnstile) {
                 sawTurnstile.set(true)
             }
-            val passed = CloudflareChallenge.dialogMayClose(probe, sawTurnstile.get())
-            if (passed && done.compareAndSet(false, true)) {
+            val passed = CloudflareChallenge.dialogMayClose(probe, sawTurnstile.get()) &&
+                CloudflareChallenge.isLinuxDoHost(browser.cefBrowser.url.orEmpty())
+            if (passed) {
                 logger.info("Challenge passed on ${probe.url} ready=${probe.ready} sawTurnstile=${sawTurnstile.get()}")
-                result.complete(true)
-                dialog.dispose()
+                finish(true)
             }
             JBCefJSQuery.Response("")
         }
@@ -95,9 +133,9 @@ class JcefChallengeDialog(
         }
         val timer = Timer(100) { probe() }
         timer.start()
-        val loadHandler = object : CefLoadHandlerAdapter() {
+        val loadHandler = object : org.cef.handler.CefLoadHandlerAdapter() {
             override fun onLoadingStateChange(
-                cefBrowser: CefBrowser,
+                cefBrowser: org.cef.browser.CefBrowser,
                 isLoading: Boolean,
                 canGoBack: Boolean,
                 canGoForward: Boolean,
@@ -112,13 +150,19 @@ class JcefChallengeDialog(
             override fun windowClosed(e: java.awt.event.WindowEvent) {
                 timer.stop()
                 browser.jbCefClient.removeLoadHandler(loadHandler, browser.cefBrowser)
+                browser.jbCefClient.removeAllHandlers(browser.cefBrowser)
                 query.dispose()
-                if (done.compareAndSet(false, true)) {
-                    result.completeExceptionally(IllegalStateException("cancelled"))
-                }
+                browser.dispose()
+                finish(false)
             }
         })
-        dialog.isVisible = true
+        try {
+            dialog.isVisible = true
+        } finally {
+            if (!done.get()) {
+                finish(false)
+            }
+        }
     }
 
     companion object {

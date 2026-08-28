@@ -10,7 +10,6 @@ import java.awt.RenderingHints
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.image.ImageObserver
-import javax.swing.ImageIcon
 import javax.swing.JComponent
 
 class PostImage(
@@ -18,7 +17,8 @@ class PostImage(
     private val originalUrl: String = "",
     private val loadOriginal: (String, (ByteArray?) -> Unit) -> Unit = { _, done -> done(null) },
 ) : JComponent(), ImageObserver {
-    private val source: Image = ImageIcon(bytes).image
+    private val source: Image = SafeImages.decode(bytes)
+        ?: java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
     private var opening: Boolean = false
 
     init {

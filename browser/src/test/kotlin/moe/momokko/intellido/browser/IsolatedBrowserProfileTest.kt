@@ -48,4 +48,14 @@ class IsolatedBrowserProfileTest {
         }
         assertTrue(IsolatedBrowserProfiles.isForbiddenSystemBrowserPath(chrome))
     }
+
+    @Test
+    fun `anonymous prepare also wipes the default jcef_cache leftover`() {
+        val leftover = root.resolve(IsolatedBrowserProfiles.DEFAULT_CACHE_DIR).resolve("Cookies")
+        Files.createDirectories(leftover.parent)
+        Files.writeString(leftover, "cookie=secret")
+        IsolatedBrowserProfiles.prepareAnonymous(root, ReleaseChannel.STABLE)
+        assertTrue(Files.notExists(leftover))
+        assertTrue(IsolatedBrowserProfiles.CEF_SWITCHES.contains("--disable-extensions"))
+    }
 }

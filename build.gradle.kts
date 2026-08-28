@@ -596,6 +596,7 @@ fun intellidoJvmProperties(): List<String> = listOf(
     "-Dintellido.version=${project.version}",
     "-Dintellido.transport=$intellidoTransport",
     "-Dintellij.platform.load.app.info.from.resources=true",
+    "-Dide.browser.jcef.extra.args=--disable-extensions --disable-component-extensions-with-background-pages --disable-default-apps",
 )
 
 fun upsertProperties(file: File, extras: Map<String, String>) {

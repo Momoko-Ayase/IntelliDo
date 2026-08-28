@@ -18,6 +18,7 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.ListSelectionModel
@@ -39,6 +40,7 @@ class DirectoryPanel(
     private var topicRows: List<HomeTopic> = emptyList()
     private var showingTopics: Boolean = false
     private var rootRows: List<DirectoryRow> = emptyList()
+    private val loadGen = AtomicInteger(0)
 
     init {
         border = JBUI.Borders.empty(16)
@@ -88,9 +90,13 @@ class DirectoryPanel(
         topicRows = emptyList()
         if (kind == DirectoryKind.ABOUT) {
             paintMessage(IntelliDoStrings.message("directory.loading", locale))
+            val gen = loadGen.incrementAndGet()
             dispatch(true) {
                 val result = runCatching { client.loadAbout() }
                 dispatch(false) {
+                    if (gen != loadGen.get()) {
+                        return@dispatch
+                    }
                     result.onSuccess { about -> showAbout(about) }
                         .onFailure { error ->
                             paintMessage(error.message ?: IntelliDoStrings.message("home.loadFailed", locale))
@@ -100,9 +106,13 @@ class DirectoryPanel(
             return
         }
         paintMessage(IntelliDoStrings.message("directory.loading", locale))
+        val gen = loadGen.incrementAndGet()
         dispatch(true) {
             val result = runCatching { loadRootRows() }
             dispatch(false) {
+                if (gen != loadGen.get()) {
+                    return@dispatch
+                }
                 result.onSuccess { rows ->
                     rootRows = rows
                     replaceRows(rows.ifEmpty { listOf(DirectoryRow.Message(IntelliDoStrings.message("directory.empty", locale))) })
@@ -148,9 +158,13 @@ class DirectoryPanel(
 
     private fun loadTopics(block: () -> List<HomeTopic>) {
         paintMessage(IntelliDoStrings.message("directory.loading", locale))
+        val gen = loadGen.incrementAndGet()
         dispatch(true) {
             val result = runCatching(block)
             dispatch(false) {
+                if (gen != loadGen.get()) {
+                    return@dispatch
+                }
                 result.onSuccess { topics ->
                     showingTopics = true
                     topicRows = topics

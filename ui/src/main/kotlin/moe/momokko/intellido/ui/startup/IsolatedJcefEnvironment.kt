@@ -25,8 +25,24 @@ object IsolatedJcefEnvironment {
         IsolatedBrowserProfiles.jvmOverrides(settings).forEach { (key, value) ->
             System.setProperty(key, value)
         }
+        val previous = System.getProperty("ide.browser.jcef.extra.args").orEmpty()
+        if (IsolatedBrowserProfiles.CEF_SWITCHES.any { switch -> switch !in previous }) {
+            System.setProperty(
+                "ide.browser.jcef.extra.args",
+                (previous.split(" ").filter { it.isNotBlank() } + IsolatedBrowserProfiles.CEF_SWITCHES)
+                    .distinct()
+                    .joinToString(" "),
+            )
+        }
         return try {
-            val cefSettings = JCefAppConfig.getInstance().cefSettings
+            val config = JCefAppConfig.getInstance()
+            val args = config.appArgsAsList
+            IsolatedBrowserProfiles.CEF_SWITCHES.forEach { switch ->
+                if (args.none { existing -> existing == switch }) {
+                    runCatching { args.add(switch) }
+                }
+            }
+            val cefSettings = config.cefSettings
             cefSettings.cache_path = settings.cachePath.toAbsolutePath().toString()
             cefSettings.persist_session_cookies = settings.persistSessionCookies
             cefSettings.locale = settings.locale

@@ -41,8 +41,14 @@ class AboutPanel(
         title.alignmentX = LEFT_ALIGNMENT
         column.add(title)
         if (about.description.isNotBlank()) {
-            val description = JBLabel("<html><body style='width:520px'>${about.description}</body></html>")
-            description.foreground = GuestUi.muted
+            val document = moe.momokko.intellido.domain.content.CookedHtmlParser().parse(about.description)
+            val description = moe.momokko.intellido.ui.content.PostBodyPane(
+                document,
+                onNavigate = { url ->
+                    onOpenUrl(url)
+                    true
+                },
+            )
             description.alignmentX = LEFT_ALIGNMENT
             description.border = JBUI.Borders.empty(8, 0, 16, 0)
             column.add(description)

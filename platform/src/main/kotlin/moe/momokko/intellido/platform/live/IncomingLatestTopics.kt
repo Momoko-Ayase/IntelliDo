@@ -4,7 +4,7 @@ package moe.momokko.intellido.platform.live
  * Unique topic ids bumped on `/latest` since the last list refresh.
  */
 class IncomingLatestTopics {
-    private val ids = LinkedHashSet<Long>()
+    private val ids = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
 
     fun note(topicId: Long) {
         if (topicId > 0) {

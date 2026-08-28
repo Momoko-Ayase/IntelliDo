@@ -3,7 +3,6 @@ package moe.momokko.intellido.ui.content
 import moe.momokko.intellido.domain.content.MediaUrls
 import java.awt.Image
 import java.util.concurrent.ConcurrentHashMap
-import javax.swing.ImageIcon
 
 /**
  * In-process images for cooked HTML. Swing's HTMLEditorKit cannot paint `data:` URLs,
@@ -20,7 +19,8 @@ object InlineMedia {
         if (bytes.isEmpty()) {
             return
         }
-        putImage(url, ImageIcon(bytes).image)
+        val image = SafeImages.decode(bytes) ?: return
+        putImage(url, image)
     }
 
     fun putImage(url: String, image: Image) {

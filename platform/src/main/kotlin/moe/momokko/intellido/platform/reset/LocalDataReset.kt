@@ -59,7 +59,9 @@ object LocalDataReset {
             return
         }
         Files.walk(path).use { stream ->
-            stream.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+            stream.sorted(Comparator.reverseOrder()).forEach { child ->
+                runCatching { Files.deleteIfExists(child) }
+            }
         }
     }
 

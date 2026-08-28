@@ -33,6 +33,7 @@ class BrowseFileEditor(
             JcefBrowseView(
                 onNative = { link -> IntelliDoWorkspace.openNative(project, link) },
                 onExternal = { BrowserUtil.browse(it) },
+                onConfirm = { IntelliDoWorkspace.openFromUrl(project, it) },
                 onDownload = { target, _ -> IntelliDoWorkspace.saveAttachment(project, target) },
                 onCopy = { IntelliDoWorkspace.copyText(it) },
                 onLocation = { panel?.refreshOrigin() },

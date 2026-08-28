@@ -774,7 +774,7 @@ private class NativeGraphicPane(
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(event: MouseEvent) {
                     if (!imageBounds.contains(event.point) || onNavigate(href)) return
-                    if (href.startsWith("https://") || href.startsWith("http://")) BrowserUtil.browse(href)
+                    if (href.startsWith("https://")) BrowserUtil.browse(href)
                 }
             })
         }
@@ -998,7 +998,7 @@ private class ImageGridPane(
                 val index = rectangles.indexOfFirst { it.contains(event.point) }
                 val target = cells.getOrNull(index)?.first?.original.orEmpty()
                 if (target.isBlank() || onNavigate(target)) return
-                if (target.startsWith("https://") || target.startsWith("http://")) BrowserUtil.browse(target)
+                if (target.startsWith("https://")) BrowserUtil.browse(target)
             }
         })
     }

@@ -36,7 +36,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
     private val logger = Logger.getInstance(JcefLinuxDoJsonFetcher::class.java)
     private val lock = Any()
     private val gate = JcefCallGate()
-    private val memory = ConcurrentHashMap<String, ByteArray>()
+    private val memory = BoundedBytesCache()
     private val diskCache = HashedFileCache(
         Path.of(PathManager.getSystemPath(), "intellido-media", "avatars"),
     )
@@ -50,6 +50,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
     private var originReady: Boolean = false
     private val browser: JBCefBrowser
     private val query: JBCefJSQuery
+    private val loadHandler: CefLoadHandlerAdapter
 
     init {
         val client = JBCefApp.getInstance().createClient()
@@ -59,57 +60,57 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             .setOffScreenRendering(true)
             .setCreateImmediately(true)
             .build()
-        browser.setOpenLinksInExternalBrowser(false)
+        JcefBrowserGuards.install(browser, pinLinuxDo = true, nativeStaysInCef = true)
         query = JBCefJSQuery.create(browser as JBCefBrowserBase)
         query.addHandler { body ->
-            val frame = parseStreamFrame(body) ?: return@addHandler JBCefJSQuery.Response("")
-            when (frame.kind) {
-                StreamKind.CHUNK -> streamHandlers[frame.gen]?.invoke(frame.data)
-                StreamKind.DONE -> pending.remove(frame.gen)?.complete("")
-                StreamKind.ERROR -> pending.remove(frame.gen)?.complete(
-                    if (frame.data.equals("abort", ignoreCase = true)) "" else "ERR ${frame.data}",
-                )
-                StreamKind.BODY -> pending.remove(frame.gen)?.complete(frame.data)
+            runCatching {
+                val frame = parseStreamFrame(body) ?: return@runCatching
+                when (frame.kind) {
+                    StreamKind.CHUNK -> streamHandlers[frame.gen]?.invoke(frame.data)
+                    StreamKind.DONE -> pending.remove(frame.gen)?.complete("")
+                    StreamKind.ERROR -> pending.remove(frame.gen)?.complete(
+                        if (frame.data.equals("abort", ignoreCase = true)) "" else "ERR ${frame.data}",
+                    )
+                    StreamKind.BODY -> pending.remove(frame.gen)?.complete(frame.data)
+                }
             }
             JBCefJSQuery.Response("")
         }
-        browser.jbCefClient.addLoadHandler(
-            object : CefLoadHandlerAdapter() {
-                override fun onLoadingStateChange(
-                    cefBrowser: CefBrowser,
-                    isLoading: Boolean,
-                    canGoBack: Boolean,
-                    canGoForward: Boolean,
-                ) {
-                    if (isLoading) {
-                        return
-                    }
-                    val gen = originGen.get()
-                    ApplicationManager.getApplication().invokeLater {
-                        val timer = Timer(JcefFetchPolicy.ORIGIN_SETTLE_MS) {
-                            if (originGen.get() == gen) {
-                                originPending.get()?.complete("loaded")
-                            }
+        loadHandler = object : CefLoadHandlerAdapter() {
+            override fun onLoadingStateChange(
+                cefBrowser: CefBrowser,
+                isLoading: Boolean,
+                canGoBack: Boolean,
+                canGoForward: Boolean,
+            ) {
+                if (isLoading) {
+                    return
+                }
+                val gen = originGen.get()
+                ApplicationManager.getApplication().invokeLater {
+                    val timer = Timer(JcefFetchPolicy.ORIGIN_SETTLE_MS) {
+                        if (originGen.get() == gen) {
+                            originPending.get()?.complete("loaded")
                         }
-                        timer.isRepeats = false
-                        timer.start()
                     }
+                    timer.isRepeats = false
+                    timer.start()
                 }
+            }
 
-                override fun onLoadError(
-                    cefBrowser: CefBrowser,
-                    frame: CefFrame,
-                    errorCode: org.cef.handler.CefLoadHandler.ErrorCode,
-                    errorText: String,
-                    failedUrl: String,
-                ) {
-                    if (frame.isMain) {
-                        originPending.get()?.completeExceptionally(IllegalStateException(errorText))
-                    }
+            override fun onLoadError(
+                cefBrowser: CefBrowser,
+                frame: CefFrame,
+                errorCode: org.cef.handler.CefLoadHandler.ErrorCode,
+                errorText: String,
+                failedUrl: String,
+            ) {
+                if (frame.isMain) {
+                    originPending.get()?.completeExceptionally(IllegalStateException(errorText))
                 }
-            },
-            browser.cefBrowser,
-        )
+            }
+        }
+        browser.jbCefClient.addLoadHandler(loadHandler, browser.cefBrowser)
     }
 
     override fun post(path: String, form: Map<String, String>, timeoutSec: Long): String {
@@ -127,13 +128,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         check(!ApplicationManager.getApplication().isDispatchThread) {
             "LINUX DO JCEF fetches must not run on the EDT"
         }
-        if (!originReady) {
-            synchronized(lock) {
-                if (!originReady) {
-                    ensureOrigin()
-                }
-            }
-        }
+        prepareOrigin()
         val url = LinuxDoUrls.absolute(path)
         logger.info("Streaming LINUX DO $url")
         val status = runInPagePostStream(url, form, timeoutSec) { raw ->
@@ -155,13 +150,27 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         }
         gate.beginJson()
         try {
-            synchronized(lock) {
-                throttle(JcefFetchPolicy.JSON_GAP_MS)
-                return try {
-                    ensureOrigin()
-                    fetchInPage(LinuxDoUrls.absolute(path))
-                } finally {
-                    lastFinishedAt = System.currentTimeMillis()
+            prepareOrigin()
+            val target = LinuxDoUrls.absolute(path)
+            try {
+                synchronized(lock) {
+                    throttle(JcefFetchPolicy.JSON_GAP_MS)
+                    return try {
+                        fetchInPage(target)
+                    } finally {
+                        lastFinishedAt = System.currentTimeMillis()
+                    }
+                }
+            } catch (_: ChallengeRequired) {
+                completeViaChallenge()
+                prepareOrigin()
+                synchronized(lock) {
+                    throttle(JcefFetchPolicy.JSON_GAP_MS)
+                    return try {
+                        fetchInPage(target, retriedChallenge = true)
+                    } finally {
+                        lastFinishedAt = System.currentTimeMillis()
+                    }
                 }
             }
         } finally {
@@ -178,12 +187,12 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             if (!isTrustedMediaUrl(url) || maxEdge < 1) {
                 return@forEach
             }
-            memory[url]?.let { bytes ->
+            memory.get(url)?.let { bytes ->
                 loaded[url] = bytes
                 return@forEach
             }
             diskCache.read(url)?.let { bytes ->
-                memory[url] = bytes
+                memory.put(url, bytes)
                 loaded[url] = bytes
                 return@forEach
             }
@@ -193,8 +202,8 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         }
         missing.chunked(JcefMediaBatch.CHUNK).forEach { chunk ->
             gate.yieldToJson()
+            prepareOrigin()
             val batch = synchronized(lock) {
-                ensureOrigin()
                 throttle(JcefFetchPolicy.MEDIA_GAP_MS)
                 val fetched = fetchMediaBatch(chunk)
                 lastFinishedAt = System.currentTimeMillis()
@@ -207,8 +216,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             chunk.filter { it !in loaded }.forEach { url ->
                 gate.yieldToJson()
                 val bytes = synchronized(lock) {
-                    memory[url]?.let { return@synchronized it }
-                    ensureOrigin()
+                    memory.get(url)?.let { return@synchronized it }
                     throttle(JcefFetchPolicy.MEDIA_GAP_MS)
                     val fetched = fetchMediaBytes(url) ?: fetchCdnBytes(url)
                     lastFinishedAt = System.currentTimeMillis()
@@ -226,23 +234,30 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
     }
 
     private fun remember(url: String, bytes: ByteArray) {
-        memory[url] = bytes
+        memory.put(url, bytes)
         runCatching { diskCache.write(url, bytes) }
         logger.info("Received ${bytes.size} media bytes from $url")
     }
 
-    private fun ensureOrigin() {
+    private fun prepareOrigin() {
         if (originReady) {
             return
         }
-        loadOrigin()
+        synchronized(lock) {
+            if (originReady) {
+                return
+            }
+            loadOrigin()
+        }
         if (originReady) {
             return
         }
         completeViaChallenge()
-        loadOrigin()
-        if (!originReady) {
-            throw IllegalStateException("无法加载")
+        synchronized(lock) {
+            loadOrigin()
+            if (!originReady) {
+                throw IllegalStateException("无法加载")
+            }
         }
     }
 
@@ -324,9 +339,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             } else if (challenge && !retriedChallenge) {
                 logger.info("Challenge on $url; recovering origin")
                 originReady = false
-                completeViaChallenge()
-                ensureOrigin()
-                return fetchInPage(url, retriedChallenge = true)
+                throw ChallengeRequired()
             } else {
                 logger.warn("Unexpected LINUX DO payload for $url (${extracted.length} chars): ${extracted.take(160)}")
                 throw IllegalStateException("无法加载")
@@ -345,7 +358,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
               .then(function(text){ var payload='$gen|'+String(text).replace(/[\r\n]+/g,' '); $callback })
               .catch(function(){ var payload='$gen|'; $callback });
         """.trimIndent()
-        return awaitJs(js, 15, gen)
+        return awaitJs(js, 15, gen, abortBus = false)
     }
 
     private fun runInPagePostStream(
@@ -406,7 +419,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             })();
         """.trimIndent()
         return try {
-            awaitJs(js, timeoutSec, gen)
+            awaitJs(js, timeoutSec, gen, abortBus = true)
         } finally {
             streamHandlers.remove(gen)
         }
@@ -556,7 +569,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         return JcefDataUrl.decode(body)
     }
 
-    private fun awaitJs(js: String, timeoutSec: Long, gen: Int): String {
+    private fun awaitJs(js: String, timeoutSec: Long, gen: Int, abortBus: Boolean = false): String {
         val future = CompletableFuture<String>()
         pending[gen] = future
         ApplicationManager.getApplication().invokeLater {
@@ -566,7 +579,9 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             future.get(timeoutSec, TimeUnit.SECONDS)
         } catch (error: Exception) {
             logger.info("JCEF script timed out after ${timeoutSec}s: ${error.message}")
-            abortMessageBusPoll()
+            if (abortBus) {
+                abortMessageBusPoll()
+            }
             future.complete("")
             ""
         } finally {
@@ -609,9 +624,13 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         pending.values.forEach { future -> future.complete("") }
         pending.clear()
         streamHandlers.clear()
+        runCatching { browser.jbCefClient.removeLoadHandler(loadHandler, browser.cefBrowser) }
+        runCatching { browser.jbCefClient.removeAllHandlers(browser.cefBrowser) }
         query.dispose()
         browser.dispose()
     }
+
+    private class ChallengeRequired : RuntimeException()
 
     enum class StreamKind { BODY, CHUNK, DONE, ERROR }
 

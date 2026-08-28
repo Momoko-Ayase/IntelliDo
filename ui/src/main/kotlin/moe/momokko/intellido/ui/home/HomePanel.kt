@@ -42,6 +42,8 @@ class HomePanel(
     private val incomingWrap: JBPanel<*>
     private var liveSession: GuestLiveSession? = null
     private var pendingLoad: (() -> List<HomeTopic>)? = null
+    @Volatile
+    private var disposed: Boolean = false
     private val liveListener: (List<GuestLiveEvent>) -> Unit = { events -> onLiveEvents(events) }
 
     private sealed class Filter {
@@ -115,6 +117,7 @@ class HomePanel(
     }
 
     fun disposeLive() {
+        disposed = true
         liveSession?.removeListener(liveListener)
         liveSession = null
     }
@@ -225,9 +228,11 @@ class HomePanel(
             val result = runCatching(block)
             ApplicationManager.getApplication().invokeLater {
                 loading = false
+                if (disposed) {
+                    return@invokeLater
+                }
                 val queued = pendingLoad
                 if (queued != null) {
-                    // The member switched filters mid-flight: this result is stale.
                     pendingLoad = null
                     loadOnPool(queued)
                     return@invokeLater
@@ -269,13 +274,23 @@ class HomePanel(
     }
 
     private fun bindLive() {
-        val session = runtime().liveSession ?: return
-        if (liveSession === session) {
-            return
+        val bind = Runnable {
+            if (disposed) {
+                return@Runnable
+            }
+            val session = runtime().liveSession ?: return@Runnable
+            if (liveSession === session) {
+                return@Runnable
+            }
+            liveSession?.removeListener(liveListener)
+            liveSession = session
+            session.addListener(liveListener)
         }
-        liveSession?.removeListener(liveListener)
-        liveSession = session
-        session.addListener(liveListener)
+        if (ApplicationManager.getApplication().isDispatchThread) {
+            bind.run()
+        } else {
+            ApplicationManager.getApplication().invokeLater(bind)
+        }
     }
 
     private fun onLiveEvents(events: List<GuestLiveEvent>) {
@@ -284,6 +299,9 @@ class HomePanel(
             return
         }
         ApplicationManager.getApplication().invokeLater {
+            if (disposed) {
+                return@invokeLater
+            }
             val current = filter
             latest.forEach { event ->
                 when (current) {
@@ -344,6 +362,15 @@ class HomePanel(
             ApplicationManager.getApplication().invokeLater {
                 loading = false
                 loadMorePlaceholder.isVisible = false
+                if (disposed) {
+                    return@invokeLater
+                }
+                val queued = pendingLoad
+                if (queued != null) {
+                    pendingLoad = null
+                    loadOnPool(queued)
+                    return@invokeLater
+                }
                 result.onSuccess { extra ->
                     topicTable.append(extra)
                     if (extra.isNotEmpty()) {

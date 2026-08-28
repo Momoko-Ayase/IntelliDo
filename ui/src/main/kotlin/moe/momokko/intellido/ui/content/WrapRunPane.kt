@@ -531,7 +531,7 @@ internal class WrapRunPane(
         if (onNavigate(absolute)) {
             return
         }
-        if (absolute.startsWith("https://") || absolute.startsWith("http://") || absolute.startsWith("mailto:")) {
+        if (absolute.startsWith("https://")) {
             BrowserUtil.browse(absolute)
         }
     }

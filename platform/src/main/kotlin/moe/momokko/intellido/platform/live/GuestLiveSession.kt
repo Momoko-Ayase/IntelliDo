@@ -77,7 +77,7 @@ class GuestLiveSession(
     }
 
     private fun handleChunk(chunk: String) {
-        val frames = DiscourseMessageBus.parse(chunk)
+        val frames = runCatching { DiscourseMessageBus.parse(chunk) }.getOrDefault(emptyList())
         if (frames.isEmpty()) {
             return
         }
@@ -86,16 +86,22 @@ class GuestLiveSession(
             positions.clear()
             positions.putAll(next)
         }
-        val events = DiscourseMessageBus.events(frames)
+        val events = runCatching { DiscourseMessageBus.events(frames) }.getOrDefault(emptyList())
         if (events.isNotEmpty()) {
-            listeners.forEach { listener -> listener(events) }
+            listeners.forEach { listener ->
+                runCatching { listener(events) }
+            }
         }
     }
 
     fun stop() {
         running.set(false)
-        worker?.interrupt()
+        val thread = worker
         worker = null
+        thread?.interrupt()
+        if (thread != null && thread !== Thread.currentThread()) {
+            runCatching { thread.join(2_000L) }
+        }
     }
 
     internal fun lastChannels(): Map<String, Long> = synchronized(lock) {

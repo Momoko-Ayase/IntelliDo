@@ -39,6 +39,13 @@ data class IsolatedJcefSettings(
 
 object IsolatedBrowserProfiles {
     const val CACHE_PATH_PROPERTY: String = "ide.browser.jcef.cache.path"
+    const val DEFAULT_CACHE_DIR: String = "jcef_cache"
+
+    val CEF_SWITCHES: List<String> = listOf(
+        "--disable-extensions",
+        "--disable-component-extensions-with-background-pages",
+        "--disable-default-apps",
+    )
 
     fun prepareAnonymous(root: Path, channel: ReleaseChannel): IsolatedBrowserProfile {
         val directory = root
@@ -49,6 +56,7 @@ object IsolatedBrowserProfiles {
             "IntelliDo must not use a system browser profile path: $directory"
         }
         wipe(directory)
+        wipe(root.resolve(DEFAULT_CACHE_DIR))
         Files.createDirectories(directory)
         return IsolatedBrowserProfile(
             channel = channel,

@@ -93,6 +93,8 @@ class IntelliDoRuntime {
     }
 
     fun attachLiveCommunity(fetcher: LinuxDoJsonFetcher) {
+        stopLiveSession()
+        runCatching { jsonFetcher?.close() }
         jsonFetcher = fetcher as? AutoCloseable
         mediaLoader = fetcher as? LinuxDoMediaLoader
         communityClient = BridgedLinuxDoCommunityClient(fetcher)

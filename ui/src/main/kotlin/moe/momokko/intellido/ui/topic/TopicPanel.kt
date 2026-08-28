@@ -165,6 +165,7 @@ class TopicPanel(
         }
         thread = TopicLiveMerge.replace(thread, listOf(post))
         val old = postViews[index]
+        forgetView(old)
         val next = postView(post, parser, locale)
         next.isVisible = old.isVisible
         val streamIndex = (0 until stream.componentCount).firstOrNull { stream.getComponent(it) === old }
@@ -209,7 +210,6 @@ class TopicPanel(
         extra.forEach { post ->
             insertPostView(postView(post, parser, locale))
         }
-        postViews.forEach { it.isVisible = true }
         topicMapView?.isVisible = postViews.any { view ->
             (view.getClientProperty(POST_KEY) as? TopicPost)?.postNumber == 1 && view.isVisible
         }
@@ -370,6 +370,7 @@ class TopicPanel(
             return
         }
         val old = postViews.removeAt(index)
+        forgetView(old)
         stream.remove(old)
         revalidate()
         repaint()
@@ -952,8 +953,14 @@ class TopicPanel(
     }
 
     private fun insertPostView(view: JComponent) {
-        postViews += view
         val post = view.getClientProperty(POST_KEY) as? TopicPost
+        val streamIndex = post?.id?.let { thread.streamIds.indexOf(it) } ?: Int.MAX_VALUE
+        val listAt = postViews.indexOfFirst { existing ->
+            val id = (existing.getClientProperty(POST_KEY) as? TopicPost)?.id ?: return@indexOfFirst false
+            val idx = thread.streamIds.indexOf(id)
+            idx >= 0 && idx > streamIndex
+        }.let { if (it < 0) postViews.size else it }
+        postViews.add(listAt, view)
         val insertAt = (0 until stream.componentCount).firstOrNull { index ->
             val child = stream.getComponent(index)
             child is PostSkeleton || child is LoadPulse
@@ -963,6 +970,21 @@ class TopicPanel(
             topicMapView = topicMap(thread.topic, locale)
             stream.add(topicMapView, insertAt + 1)
         }
+    }
+
+    private fun forgetView(view: JComponent) {
+        fun walk(component: java.awt.Component) {
+            when (component) {
+                is moe.momokko.intellido.ui.guest.GuestAvatar -> avatarHosts.remove(component)
+                is BoostListPane -> boostPanes.remove(component)
+                is ImageSlot -> imageSlots.remove(component)
+                is moe.momokko.intellido.ui.content.PostBodyPane -> bodies.removeAll { it.first === component }
+            }
+            if (component is java.awt.Container) {
+                component.components.forEach(::walk)
+            }
+        }
+        walk(view)
     }
 
     private fun refreshSkeletons() {
@@ -988,17 +1010,23 @@ class TopicPanel(
         return (headerAndMap + 1).coerceAtLeast(1)
     }
 
-    private fun visibleStreamStart(): Int {
-        val first = postViews.firstOrNull { it.isVisible }?.getClientProperty(POST_KEY) as? TopicPost
-            ?: return 0
-        return thread.streamIds.indexOf(first.id).coerceAtLeast(0)
-    }
+    private fun visibleStreamStart(): Int =
+        postViews.mapNotNull { view ->
+            if (!view.isVisible) {
+                return@mapNotNull null
+            }
+            val id = (view.getClientProperty(POST_KEY) as? TopicPost)?.id ?: return@mapNotNull null
+            thread.streamIds.indexOf(id).takeIf { it >= 0 }
+        }.minOrNull() ?: 0
 
-    private fun visibleStreamEnd(): Int {
-        val last = postViews.lastOrNull { it.isVisible }?.getClientProperty(POST_KEY) as? TopicPost
-            ?: return -1
-        return thread.streamIds.indexOf(last.id)
-    }
+    private fun visibleStreamEnd(): Int =
+        postViews.mapNotNull { view ->
+            if (!view.isVisible) {
+                return@mapNotNull null
+            }
+            val id = (view.getClientProperty(POST_KEY) as? TopicPost)?.id ?: return@mapNotNull null
+            thread.streamIds.indexOf(id).takeIf { it >= 0 }
+        }.maxOrNull() ?: -1
 
     private fun updatePositionLabel(streamIndex: Int) {
         val id = thread.streamIds.getOrNull(streamIndex)

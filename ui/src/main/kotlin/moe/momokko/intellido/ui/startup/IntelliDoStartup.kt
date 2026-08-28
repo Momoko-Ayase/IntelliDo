@@ -95,6 +95,10 @@ object IntelliDoStartup {
 
     private fun present(probe: JcefRuntimeProbe) {
         val runtime = service<IntelliDoRuntime>()
+        if (runtime.usesLiveCommunity) {
+            IntelliDoWorkspace.openOrFocus()
+            return
+        }
         try {
             val profile = IsolatedBrowserProfiles.prepareAnonymous(
                 Path(PathManager.getSystemPath()),

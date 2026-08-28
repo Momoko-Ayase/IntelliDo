@@ -19,4 +19,11 @@ class HashedFileCacheTest {
     fun `unknown keys miss`(@TempDir dir: Path) {
         assertNull(HashedFileCache(dir).read("https://linux.do/missing.png"))
     }
+
+    @Test
+    fun `oversized payloads are not written`(@TempDir dir: Path) {
+        val huge = ByteArray(HashedFileCache.MAX_FILE_BYTES + 1)
+        HashedFileCache(dir).write("https://linux.do/huge.bin", huge)
+        assertNull(HashedFileCache(dir).read("https://linux.do/huge.bin"))
+    }
 }

@@ -28,6 +28,7 @@ import moe.momokko.intellido.ui.startup.IntelliDoRuntime
 import java.awt.BorderLayout
 import java.beans.PropertyChangeListener
 import java.beans.PropertyChangeSupport
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
 
 class TopicFileEditor(
@@ -46,6 +47,7 @@ class TopicFileEditor(
     private val runtime: IntelliDoRuntime = service()
     private val presence = TopicPresenceState()
     private val requestedMedia = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val disposed = AtomicBoolean(false)
     private val liveListener: (List<GuestLiveEvent>) -> Unit = { events -> onLiveEvents(events) }
 
     init {
@@ -55,6 +57,9 @@ class TopicFileEditor(
             runtime.awaitCommunity()
             val first = runCatching { runtime.communityClient.loadTopic(topicId) }
             ApplicationManager.getApplication().invokeLater {
+                if (disposed.get() || project.isDisposed) {
+                    return@invokeLater
+                }
                 host.removeAll()
                 first.onSuccess { loaded ->
                     thread = loaded
@@ -100,7 +105,7 @@ class TopicFileEditor(
 
     override fun isModified(): Boolean = false
 
-    override fun isValid(): Boolean = true
+    override fun isValid(): Boolean = !disposed.get()
 
     override fun addPropertyChangeListener(listener: PropertyChangeListener) {
         listeners.addPropertyChangeListener(listener)
@@ -111,6 +116,7 @@ class TopicFileEditor(
     }
 
     override fun dispose() {
+        disposed.set(true)
         runtime.liveSession?.removeListener(liveListener)
         runtime.liveSession?.unwatchTopic(topicId)
     }
@@ -138,7 +144,11 @@ class TopicFileEditor(
             }
                 .onFailure { logger.warn("Failed to load original image $url", it) }
                 .getOrNull()
-            ApplicationManager.getApplication().invokeLater { done(bytes) }
+            ApplicationManager.getApplication().invokeLater {
+                if (!disposed.get()) {
+                    done(bytes)
+                }
+            }
         }
     }
 
@@ -147,7 +157,11 @@ class TopicFileEditor(
             val replies = runCatching { runtime.communityClient.loadPostReplies(postId) }
                 .onFailure { logger.warn("Failed to load replies for post $postId", it) }
                 .getOrDefault(emptyList())
-            ApplicationManager.getApplication().invokeLater { done(replies) }
+            ApplicationManager.getApplication().invokeLater {
+                if (!disposed.get()) {
+                    done(replies)
+                }
+            }
         }
     }
 
@@ -162,6 +176,9 @@ class TopicFileEditor(
             val next = runCatching { runtime.communityClient.loadNextPosts(current) }
             ApplicationManager.getApplication().invokeLater {
                 loadingMore = false
+                if (disposed.get()) {
+                    return@invokeLater
+                }
                 next.onSuccess { updated ->
                     if (updated.posts.size <= current.posts.size) {
                         topicPanel.notifyEmptyFetch(current.posts.size)
@@ -172,7 +189,6 @@ class TopicFileEditor(
                     loadMedia(runtime, updated, topicPanel)
                 }.onFailure { error ->
                     logger.warn("Failed to load more posts for topic $topicId", error)
-                    topicPanel.notifyEmptyFetch(current.posts.size)
                 }
             }
         }
@@ -189,6 +205,9 @@ class TopicFileEditor(
             val next = runCatching { runtime.communityClient.loadPostsAround(current, streamIndex) }
             ApplicationManager.getApplication().invokeLater {
                 loadingMore = false
+                if (disposed.get()) {
+                    return@invokeLater
+                }
                 next.onSuccess { updated ->
                     thread = updated
                     topicPanel.reveal(updated, streamIndex)
@@ -197,7 +216,6 @@ class TopicFileEditor(
                     }
                 }.onFailure { error ->
                     logger.warn("Failed to load posts around $streamIndex for topic $topicId", error)
-                    topicPanel.notifyEmptyFetch(streamIndex)
                 }
             }
         }
@@ -233,15 +251,27 @@ class TopicFileEditor(
             logger.info("Topic $topicId media: ${avatars.size} avatars, ${images.size} images, ${emojis.size} emoji")
             val avatarBytes = runCatching { loader.load(avatars, 96) }.getOrDefault(emptyMap())
             if (avatarBytes.isNotEmpty()) {
-                ApplicationManager.getApplication().invokeLater { panel.putMedia(avatarBytes) }
+                ApplicationManager.getApplication().invokeLater {
+                    if (!disposed.get()) {
+                        panel.putMedia(avatarBytes)
+                    }
+                }
             }
             val imageBytes = runCatching { loader.load(images, 800) }.getOrDefault(emptyMap())
             if (imageBytes.isNotEmpty()) {
-                ApplicationManager.getApplication().invokeLater { panel.putMedia(imageBytes) }
+                ApplicationManager.getApplication().invokeLater {
+                    if (!disposed.get()) {
+                        panel.putMedia(imageBytes)
+                    }
+                }
             }
             val emojiBytes = runCatching { loader.load(emojis, 48) }.getOrDefault(emptyMap())
             if (emojiBytes.isNotEmpty()) {
-                ApplicationManager.getApplication().invokeLater { panel.putMedia(emojiBytes) }
+                ApplicationManager.getApplication().invokeLater {
+                    if (!disposed.get()) {
+                        panel.putMedia(emojiBytes)
+                    }
+                }
             }
             logger.info(
                 "Topic $topicId loaded ${avatarBytes.size} avatar files, ${imageBytes.size} image files, ${emojiBytes.size} emoji files",
@@ -257,12 +287,18 @@ class TopicFileEditor(
         urls.filter { url -> requestedMedia.add(MediaUrls.key(url)) }
 
     private fun watchLive(loaded: TopicThread) {
+        if (disposed.get()) {
+            return
+        }
         val session = runtime.liveSession ?: return
         session.watchTopic(topicId, loaded.messageBusLastId)
         session.addListener(liveListener)
     }
 
     private fun onLiveEvents(events: List<GuestLiveEvent>) {
+        if (disposed.get()) {
+            return
+        }
         val mine = events.filter { event ->
             when (event) {
                 is GuestLiveEvent.TopicPostChanged -> event.topicId == topicId
@@ -274,15 +310,22 @@ class TopicFileEditor(
             return
         }
         ApplicationManager.getApplication().executeOnPooledThread {
+            if (disposed.get()) {
+                return@executeOnPooledThread
+            }
             mine.filterIsInstance<GuestLiveEvent.TopicPostChanged>().forEach { event ->
                 applyPostEvent(event)
             }
             val presenceEvents = mine.filterIsInstance<GuestLiveEvent.TopicPresence>()
             if (presenceEvents.isNotEmpty()) {
-                presenceEvents.forEach { presence.apply(it) }
-                val users = presence.snapshot()
+                synchronized(presence) {
+                    presenceEvents.forEach { presence.apply(it) }
+                }
+                val users = synchronized(presence) { presence.snapshot() }
                 ApplicationManager.getApplication().invokeLater {
-                    panel?.showPresence(users)
+                    if (!disposed.get()) {
+                        panel?.showPresence(users)
+                    }
                 }
                 loadPresenceAvatars(users)
             }
@@ -290,38 +333,46 @@ class TopicFileEditor(
     }
 
     private fun applyPostEvent(event: GuestLiveEvent.TopicPostChanged) {
-        val current = thread ?: return
-        if (event.destroyed) {
+        if (event.destroyed || event.deleted) {
             ApplicationManager.getApplication().invokeLater {
+                if (disposed.get()) {
+                    return@invokeLater
+                }
+                val current = thread ?: return@invokeLater
                 val topicPanel = panel ?: return@invokeLater
-                thread = TopicLiveMerge.remove(current, event.postId)
-                topicPanel.removePost(event.postId)
+                thread = if (event.destroyed) {
+                    TopicLiveMerge.remove(current, event.postId)
+                } else {
+                    TopicLiveMerge.hide(current, event.postId)
+                }
+                if (event.destroyed) {
+                    topicPanel.removePost(event.postId)
+                } else {
+                    topicPanel.markDeleted(event.postId)
+                }
             }
             return
         }
-        if (event.deleted) {
-            ApplicationManager.getApplication().invokeLater {
-                val topicPanel = panel ?: return@invokeLater
-                thread = TopicLiveMerge.hide(current, event.postId)
-                topicPanel.markDeleted(event.postId)
-            }
-            return
-        }
+        val title = thread?.topic?.title ?: return
         val posts = runCatching {
-            runtime.communityClient.loadTopicPosts(topicId, listOf(event.postId), current.topic.title)
+            runtime.communityClient.loadTopicPosts(topicId, listOf(event.postId), title)
         }.onFailure { error ->
             logger.warn("Failed to fetch live post ${event.postId} for topic $topicId", error)
         }.getOrDefault(emptyList())
-        if (posts.isEmpty()) {
+        if (posts.isEmpty() || disposed.get()) {
             return
         }
-        val updated = if (event.created) {
-            TopicLiveMerge.insert(current, posts)
-        } else {
-            TopicLiveMerge.replace(current, posts)
-        }
         ApplicationManager.getApplication().invokeLater {
+            if (disposed.get()) {
+                return@invokeLater
+            }
+            val current = thread ?: return@invokeLater
             val topicPanel = panel ?: return@invokeLater
+            val updated = if (event.created) {
+                TopicLiveMerge.insert(current, posts)
+            } else {
+                TopicLiveMerge.replace(current, posts)
+            }
             thread = updated
             if (event.created) {
                 topicPanel.appendPosts(updated)
@@ -346,7 +397,9 @@ class TopicFileEditor(
                 return@executeOnPooledThread
             }
             ApplicationManager.getApplication().invokeLater {
-                panel?.showPresence(presence.snapshot(), bytes)
+                if (!disposed.get()) {
+                    panel?.showPresence(synchronized(presence) { presence.snapshot() }, bytes)
+                }
             }
         }
     }

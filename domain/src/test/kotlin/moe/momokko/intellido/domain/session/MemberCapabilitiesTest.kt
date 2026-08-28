@@ -27,6 +27,19 @@ class MemberCapabilitiesTest {
     }
 
     @Test
+    fun `signed in members are capped at trust level 3`() {
+        val signed = MemberSession.SignedIn("helper", trustLevel = 2)
+        assertTrue(MemberCapabilities.isAvailable(signed, MemberAction.READ_PUBLIC_TOPIC))
+        assertTrue(MemberCapabilities.isAvailable(signed, MemberAction.REPLY))
+        assertFalse(
+            MemberCapabilities.isAvailable(
+                MemberSession.SignedIn("staff", trustLevel = 4),
+                MemberAction.REPLY,
+            ),
+        )
+    }
+
+    @Test
     fun `server denial wins even for an otherwise readable public topic`() {
         assertFalse(
             MemberCapabilities.isAvailable(

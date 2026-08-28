@@ -34,6 +34,18 @@ class JcefLinuxDoJsonFetcherTest {
     }
 
     @Test
+    fun `http is not treated as an already absolute community path`() {
+        assertEquals(
+            "https://linux.do/http-only",
+            moe.momokko.intellido.transport.LinuxDoUrls.absolute("http-only"),
+        )
+        assertEquals(
+            "https://ping.ldstatic.com/message-bus/x/poll",
+            moe.momokko.intellido.transport.LinuxDoUrls.absolute("https://ping.ldstatic.com/message-bus/x/poll"),
+        )
+    }
+
+    @Test
     fun `stream frames keep chunks separate from json bodies`() {
         val chunk = JcefLinuxDoJsonFetcher.parseStreamFrame("3|C|[]")
         assertEquals(3, chunk?.gen)

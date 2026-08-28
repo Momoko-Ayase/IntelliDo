@@ -138,7 +138,10 @@ object DiscourseMessageBus {
             }
             val user = element.asJsonObject
             val id = user.long("id") ?: return@mapNotNull null
-            val username = user.str("username") ?: return@mapNotNull null
+            val username = user.str("username")?.trim().orEmpty()
+            if (id <= 0 || username.isBlank()) {
+                return@mapNotNull null
+            }
             LivePresenceUser(
                 id = id,
                 username = username,
@@ -161,11 +164,31 @@ object DiscourseMessageBus {
 private fun JsonObject.str(name: String): String? =
     get(name)?.takeUnless { it.isJsonNull }?.let { if (it.isJsonPrimitive) it.asString else null }
 
-private fun JsonObject.long(name: String): Long? =
-    get(name)?.takeUnless { it.isJsonNull }?.let { if (it.isJsonPrimitive) it.asLong else null }
+private fun JsonObject.long(name: String): Long? {
+    val element = get(name)?.takeUnless { it.isJsonNull } ?: return null
+    if (!element.isJsonPrimitive) {
+        return null
+    }
+    val primitive = element.asJsonPrimitive
+    return when {
+        primitive.isNumber -> primitive.asLong
+        primitive.isString -> primitive.asString.toLongOrNull()
+        else -> null
+    }
+}
 
-private fun JsonObject.int(name: String): Int? =
-    get(name)?.takeUnless { it.isJsonNull }?.let { if (it.isJsonPrimitive) it.asInt else null }
+private fun JsonObject.int(name: String): Int? {
+    val element = get(name)?.takeUnless { it.isJsonNull } ?: return null
+    if (!element.isJsonPrimitive) {
+        return null
+    }
+    val primitive = element.asJsonPrimitive
+    return when {
+        primitive.isNumber -> primitive.asInt
+        primitive.isString -> primitive.asString.toIntOrNull()
+        else -> null
+    }
+}
 
 private fun JsonObject.obj(name: String): JsonObject? =
     get(name)?.takeIf { it.isJsonObject }?.asJsonObject

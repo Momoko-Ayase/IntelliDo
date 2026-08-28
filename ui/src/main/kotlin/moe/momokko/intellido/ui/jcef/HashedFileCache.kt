@@ -16,7 +16,7 @@ class HashedFileCache(
     }
 
     fun write(key: String, bytes: ByteArray) {
-        if (bytes.isEmpty()) {
+        if (bytes.isEmpty() || bytes.size > MAX_FILE_BYTES) {
             return
         }
         Files.createDirectories(dir)
@@ -30,5 +30,9 @@ class HashedFileCache(
         val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
         val hex = digest.joinToString("") { byte -> "%02x".format(byte) }
         return dir.resolve(hex)
+    }
+
+    companion object {
+        const val MAX_FILE_BYTES: Int = 2_500_000
     }
 }

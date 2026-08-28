@@ -17,6 +17,7 @@ import moe.momokko.intellido.ui.workspace.IntelliDoWorkspace
 import java.awt.BorderLayout
 import java.beans.PropertyChangeListener
 import java.beans.PropertyChangeSupport
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JComponent
 
 class UserFileEditor(
@@ -27,6 +28,7 @@ class UserFileEditor(
     private val listeners = PropertyChangeSupport(this)
     private val host: JBPanel<*> = JBPanel<JBPanel<*>>(BorderLayout())
     private val runtime: IntelliDoRuntime = service()
+    private val disposed = AtomicBoolean(false)
 
     init {
         host.border = JBUI.Borders.empty(24)
@@ -35,6 +37,9 @@ class UserFileEditor(
             runtime.awaitCommunity()
             val loaded = runCatching { runtime.communityClient.loadPublicProfile(username) }
             ApplicationManager.getApplication().invokeLater {
+                if (disposed.get() || project.isDisposed) {
+                    return@invokeLater
+                }
                 host.removeAll()
                 loaded.onSuccess { profile ->
                     val panel = UserPanel(
@@ -60,7 +65,9 @@ class UserFileEditor(
                             ApplicationManager.getApplication().executeOnPooledThread {
                                 val bytes = runCatching { loader.load(urls, 120) }.getOrDefault(emptyMap())
                                 ApplicationManager.getApplication().invokeLater {
-                                    panel.applyMedia(bytes)
+                                    if (!disposed.get()) {
+                                        panel.applyMedia(bytes)
+                                    }
                                 }
                             }
                         }
@@ -87,7 +94,7 @@ class UserFileEditor(
 
     override fun isModified(): Boolean = false
 
-    override fun isValid(): Boolean = true
+    override fun isValid(): Boolean = !disposed.get()
 
     override fun addPropertyChangeListener(listener: PropertyChangeListener) {
         listeners.addPropertyChangeListener(listener)
@@ -97,7 +104,9 @@ class UserFileEditor(
         listeners.removePropertyChangeListener(listener)
     }
 
-    override fun dispose() = Unit
+    override fun dispose() {
+        disposed.set(true)
+    }
 
     companion object {
         private val logger = Logger.getInstance(UserFileEditor::class.java)

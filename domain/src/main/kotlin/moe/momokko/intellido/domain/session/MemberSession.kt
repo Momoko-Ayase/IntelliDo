@@ -49,6 +49,17 @@ object MemberCapabilities {
         MemberAction.SEARCH_PUBLIC,
     )
 
+    private val signedInActions: Set<MemberAction> = anonymousReads + setOf(
+        MemberAction.LIKE,
+        MemberAction.REPLY,
+        MemberAction.BOOKMARK,
+        MemberAction.MESSAGE,
+        MemberAction.CHAT,
+        MemberAction.CONNECT,
+        MemberAction.NOTIFICATION,
+        MemberAction.DRAFT,
+    )
+
     fun isAvailable(
         session: MemberSession,
         action: MemberAction,
@@ -59,7 +70,7 @@ object MemberCapabilities {
         }
         return when (session) {
             MemberSession.Anonymous -> action in anonymousReads
-            is MemberSession.SignedIn -> true
+            is MemberSession.SignedIn -> session.trustLevel in 0..3 && action in signedInActions
         }
     }
 }

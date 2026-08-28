@@ -80,13 +80,11 @@ class BridgedLinuxDoCommunityClient(
         return mergePosts(thread, fetchPostChunk(thread, missing))
     }
 
-    private fun fetchPostChunk(thread: TopicThread, ids: List<Long>) =
-        runCatching {
-            mapper.extraPosts(
-                fetch.get(LinuxDoUrls.topicPosts(thread.topic.id, ids)),
-                thread.topic.title,
-            )
-        }.getOrDefault(emptyList())
+    private fun fetchPostChunk(thread: TopicThread, ids: List<Long>): List<TopicPost> =
+        mapper.extraPosts(
+            fetch.get(LinuxDoUrls.topicPosts(thread.topic.id, ids)),
+            thread.topic.title,
+        )
 
     private fun mergePosts(thread: TopicThread, extra: List<TopicPost>): TopicThread {
         if (extra.isEmpty()) {
