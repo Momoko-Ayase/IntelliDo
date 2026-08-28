@@ -91,6 +91,23 @@ class CommunityNavModelTest {
     }
 
     @Test
+    fun `guest nav does not attach another category's icon or id to a seed name`() {
+        val entries = CommunityNavModel.guest(
+            listOf(
+                CommunityCategory(11, "搞七捻三", "gossip", null, 10, false, icon = "droplet"),
+                CommunityCategory(42, "文档共建", "wiki", null, 5, false, icon = "book"),
+                CommunityCategory(99, "运营反馈", "feedback", null, 3, false, icon = "comments"),
+            ),
+        )
+        val byName = entries.filterIsInstance<CommunityNavEntry.Category>().associate { it.category.name to it.category }
+        assertEquals("droplet", byName.getValue("搞七捻三").icon)
+        assertEquals(11L, byName.getValue("搞七捻三").id)
+        assertEquals("comments", byName.getValue("运营反馈").icon)
+        assertEquals(99L, byName.getValue("运营反馈").id)
+        assertEquals("book", byName.getValue("文档共建").icon)
+    }
+
+    @Test
     fun `guest nav shows sidebar categories before the live catalog arrives`() {
         val entries = CommunityNavModel.guest(emptyList())
         val names = entries.filterIsInstance<CommunityNavEntry.Category>().map { it.category.name }

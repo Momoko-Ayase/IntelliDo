@@ -74,8 +74,10 @@ class CommunityNavPanel(
     }
 
     /**
-     * The seed list fixes which categories appear; the live catalog supplies the
-     * authoritative ids, colours, icons and topic counts for them.
+     * The seed list fixes which categories appear and in what order. The live
+     * catalog overlays ids, colours, icons and topic counts onto the same
+     * name/slug — never onto a stale seed id, which would swap icons and
+     * click targets between rows.
      */
     private fun loadLiveCatalog() {
         ApplicationManager.getApplication().executeOnPooledThread {

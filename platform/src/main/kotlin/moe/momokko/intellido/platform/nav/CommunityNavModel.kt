@@ -79,7 +79,7 @@ object CommunityNavModel {
         add(CommunityNavEntry.Header("nav.section.resources"))
         addAll(RESOURCE_LINKS)
         add(CommunityNavEntry.Header("nav.section.categories"))
-        sidebarCategories(categories).forEach { add(CommunityNavEntry.Category(it)) }
+        LinuxDoSidebarCategories.overlay(categories).forEach { add(CommunityNavEntry.Category(it)) }
         add(
             CommunityNavEntry.Action(
                 CommunityNavAction.ALL_CATEGORIES,
@@ -90,26 +90,6 @@ object CommunityNavModel {
         add(CommunityNavEntry.Header("nav.section.tags"))
         sidebarTags(tags).forEach { add(CommunityNavEntry.Tag(it)) }
         add(CommunityNavEntry.Action(CommunityNavAction.ALL_TAGS, "nav.allTags", icon = "list"))
-    }
-
-    private fun sidebarCategories(live: List<CommunityCategory>): List<CommunityCategory> {
-        val byId = live.filterNot { it.readRestricted }.associateBy { it.id }
-        val byName = live.filterNot { it.readRestricted }.associateBy { it.name }
-        return LinuxDoSidebarCategories.GUEST.map { seed ->
-            val hit = byId[seed.id] ?: byName[seed.name]
-            if (hit == null) {
-                seed
-            } else {
-                seed.copy(
-                    id = hit.id,
-                    slug = hit.slug.ifBlank { seed.slug },
-                    description = hit.description ?: seed.description,
-                    topicCount = hit.topicCount,
-                    color = hit.color ?: seed.color,
-                    icon = hit.icon ?: seed.icon,
-                )
-            }
-        }
     }
 
     private fun sidebarTags(tags: List<CommunityTag>): List<CommunityTag> {

@@ -22,6 +22,29 @@ object LinuxDoSidebarCategories {
         category(11, "运营反馈", "feedback", "90A4AE", "comments"),
     )
 
+    /**
+     * Keep the seed names and order. Copy live ids / colours / icons from the
+     * same category, identified by name then slug. Matching by id alone would
+     * paint another category's icon onto this row and open that category's
+     * topics when the seed ids are stale.
+     */
+    fun overlay(live: List<CommunityCategory>): List<CommunityCategory> {
+        val visible = live.filterNot { it.readRestricted }
+        val byName = visible.associateBy { it.name }
+        val bySlug = visible.associateBy { it.slug.lowercase() }
+        return GUEST.map { seed ->
+            val hit = byName[seed.name] ?: bySlug[seed.slug.lowercase()] ?: return@map seed
+            seed.copy(
+                id = hit.id,
+                slug = hit.slug.ifBlank { seed.slug },
+                description = hit.description ?: seed.description,
+                topicCount = hit.topicCount,
+                color = hit.color?.takeIf { it.isNotBlank() } ?: seed.color,
+                icon = hit.icon?.takeIf { it.isNotBlank() } ?: seed.icon,
+            )
+        }
+    }
+
     private fun category(
         id: Long,
         name: String,
