@@ -84,6 +84,9 @@ playwright/.auth/
 /*.gif
 
 # Compiled leftovers
+__pycache__/
+*.py[cod]
+*$py.class
 *.class
 *.war
 *.ear
