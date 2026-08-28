@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "id": 1001,
+      "topic_id": 101,
+      "blurb": "欢迎使用 IntelliDo。",
+      "username": "system",
+      "post_number": 1
+    }
+  ],
+  "topics": [
+    {
+      "id": 101,
+      "title": "欢迎使用 IntelliDo",
+      "slug": "welcome-to-intellido",
+      "posts_count": 4,
+      "reply_count": 3,
+      "last_posted_at": "2026-08-22T01:20:00Z",
+      "views": 29700
+    }
+  ]
+}

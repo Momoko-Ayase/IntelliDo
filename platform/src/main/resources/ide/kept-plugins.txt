@@ -1,0 +1,21 @@
+# Bundled plugins IntelliDo ships. Anything else is omitted from the product, not disabled.
+com.intellij.modules.jcef
+org.intellij.plugins.markdown
+com.intellij.zh
+com.intellij.ja
+com.intellij.ko
+com.intellij.platform.images
+com.intellij.modules.json
+com.intellij.platform.daemon
+com.intellij.plugins.eclipsekeymap
+com.intellij.plugins.netbeanskeymap
+com.intellij.plugins.visualstudiokeymap
+com.intellij.properties
+intellij.libraries.misc.plugin
+intellij.navbar.plugin
+intellij.recentFiles.plugin
+intellij.structuralSearch.plugin
+intellij.structureView.plugin
+intellij.webp
+org.jetbrains.plugins.yaml
+tanvd.grazi

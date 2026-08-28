@@ -1,0 +1,157 @@
+<idea-plugin>
+    <id>moe.momokko.intellido</id>
+    <name>IntelliDo</name>
+    <vendor url="https://github.com/Momoko-Ayase/IntelliDo">Momoko Ayase</vendor>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.jcef</depends>
+    <dependencies>
+        <module name="intellij.platform.ui.jcef"/>
+        <module name="intellij.libraries.jcef"/>
+    </dependencies>
+
+    <description><![CDATA[
+        <p>IntelliDo is an unofficial LINUX DO desktop client built as a standalone IntelliJ Platform product.</p>
+        <p>非官方 LINUX DO 客户端 / Unofficial LINUX DO Client. Not made, endorsed, or supported by LINUX DO.</p>
+    ]]></description>
+
+    <applicationListeners>
+        <listener class="moe.momokko.intellido.ui.startup.IntelliDoAppLifecycleListener"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType name="IntelliDoHome"
+                  implementationClass="moe.momokko.intellido.ui.home.HomeFileType"
+                  fieldName="INSTANCE"
+                  extensions="intellido-home"/>
+        <fileType name="IntelliDoWelcome"
+                  implementationClass="moe.momokko.intellido.ui.welcome.WelcomeFileType"
+                  fieldName="INSTANCE"
+                  extensions="intellido-welcome"/>
+        <fileType name="IntelliDoTopic"
+                  implementationClass="moe.momokko.intellido.ui.topic.TopicFileType"
+                  fieldName="INSTANCE"
+                  extensions="intellido-topic"/>
+        <fileType name="IntelliDoDirectory"
+                  implementationClass="moe.momokko.intellido.ui.directory.DirectoryFileType"
+                  fieldName="INSTANCE"
+                  extensions="intellido-directory"/>
+        <fileType name="IntelliDoUser"
+                  implementationClass="moe.momokko.intellido.ui.profile.UserFileType"
+                  fieldName="INSTANCE"
+                  extensions="intellido-user"/>
+        <fileType name="IntelliDoBrowse"
+                  implementationClass="moe.momokko.intellido.ui.browse.BrowseFileType"
+                  fieldName="INSTANCE"
+                  extensions="intellido-browse"/>
+        <fileEditorProvider implementation="moe.momokko.intellido.ui.home.HomeFileEditorProvider"/>
+        <fileEditorProvider implementation="moe.momokko.intellido.ui.welcome.WelcomeFileEditorProvider"/>
+        <fileEditorProvider implementation="moe.momokko.intellido.ui.topic.TopicFileEditorProvider"/>
+        <fileEditorProvider implementation="moe.momokko.intellido.ui.directory.DirectoryFileEditorProvider"/>
+        <fileEditorProvider implementation="moe.momokko.intellido.ui.profile.UserFileEditorProvider"/>
+        <fileEditorProvider implementation="moe.momokko.intellido.ui.browse.BrowseFileEditorProvider"/>
+        <editorTabTitleProvider implementation="moe.momokko.intellido.ui.home.HomeTabTitleProvider"/>
+        <editorTabTitleProvider implementation="moe.momokko.intellido.ui.welcome.WelcomeTabTitleProvider"/>
+        <editorTabTitleProvider implementation="moe.momokko.intellido.ui.topic.TopicTabTitleProvider"/>
+        <editorTabTitleProvider implementation="moe.momokko.intellido.ui.directory.DirectoryTabTitleProvider"/>
+        <editorTabTitleProvider implementation="moe.momokko.intellido.ui.profile.UserTabTitleProvider"/>
+        <editorTabTitleProvider implementation="moe.momokko.intellido.ui.browse.BrowseTabTitleProvider"/>
+        <searchEverywhereContributor implementation="moe.momokko.intellido.ui.search.LinuxDoSearchEverywhereContributorFactory"/>
+        <postStartupActivity implementation="moe.momokko.intellido.ui.workspace.IntelliDoWorkspaceActivity"/>
+        <toolWindow id="LINUX DO"
+                    icon="/icons/linuxdo.svg"
+                    anchor="left"
+                    doNotActivateOnStart="false"
+                    factoryClass="moe.momokko.intellido.ui.nav.CommunityNavToolWindowFactory"/>
+        <toolWindow id="LINUX DO Connect"
+                    anchor="right"
+                    factoryClass="moe.momokko.intellido.ui.toolwindow.ConnectToolWindowFactory"/>
+        <toolWindow id="IntelliDo Notifications"
+                    anchor="right"
+                    factoryClass="moe.momokko.intellido.ui.toolwindow.NotificationsToolWindowFactory"/>
+        <toolWindow id="IntelliDo Messages"
+                    anchor="right"
+                    factoryClass="moe.momokko.intellido.ui.toolwindow.MessagesToolWindowFactory"/>
+        <toolWindow id="LINUX DO Chat"
+                    anchor="right"
+                    factoryClass="moe.momokko.intellido.ui.toolwindow.ChatToolWindowFactory"/>
+        <toolWindow id="IntelliDo Bookmarks"
+                    anchor="right"
+                    factoryClass="moe.momokko.intellido.ui.toolwindow.BookmarksToolWindowFactory"/>
+        <toolWindow id="IntelliDo Drafts"
+                    anchor="right"
+                    factoryClass="moe.momokko.intellido.ui.toolwindow.DraftsToolWindowFactory"/>
+        <applicationConfigurable
+            parentId="appearance"
+            instance="moe.momokko.intellido.ui.settings.ReadingConfigurable"
+            id="intellido.reading"
+            displayName="阅读"/>
+        <actionConfigurationCustomizer
+            implementation="moe.momokko.intellido.ui.surface.IntelliDoActionConfigurationCustomizer"
+            order="last"/>
+        <actionConfigurationCustomizer
+            implementation="moe.momokko.intellido.ui.surface.IntelliDoMenuSurfaceCustomizer"
+            order="last"/>
+    </extensions>
+
+    <actions>
+        <group id="IntelliDo.MainGroup" text="IntelliDo" popup="false">
+            <action id="intellido.goHome"
+                    class="moe.momokko.intellido.ui.actions.GoHomeAction"
+                    text="Go to Home"/>
+            <action id="intellido.signIn"
+                    class="moe.momokko.intellido.ui.actions.SignInAction"
+                    text="Sign in"/>
+            <action id="intellido.openCategories"
+                    class="moe.momokko.intellido.ui.actions.OpenCategoriesAction"
+                    text="Categories"/>
+            <action id="intellido.openTags"
+                    class="moe.momokko.intellido.ui.actions.OpenTagsAction"
+                    text="Tags"/>
+            <action id="intellido.openGroups"
+                    class="moe.momokko.intellido.ui.actions.OpenGroupsAction"
+                    text="Groups"/>
+            <action id="intellido.openBadges"
+                    class="moe.momokko.intellido.ui.actions.OpenBadgesAction"
+                    text="Badges"/>
+            <action id="intellido.openMembers"
+                    class="moe.momokko.intellido.ui.actions.OpenMembersAction"
+                    text="Members"/>
+            <action id="intellido.openCommunityAbout"
+                    class="moe.momokko.intellido.ui.actions.OpenCommunityAboutAction"
+                    text="About LINUX DO"/>
+            <action id="intellido.readingSettings"
+                    class="moe.momokko.intellido.ui.actions.ReadingSettingsAction"
+                    text="Reading"/>
+            <action id="intellido.findInTopic"
+                    class="moe.momokko.intellido.ui.actions.FindInTopicAction"
+                    text="Find in topic">
+                <keyboard-shortcut first-keystroke="control F" keymap="$default"/>
+                <keyboard-shortcut first-keystroke="meta F" keymap="Mac OS X"/>
+            </action>
+            <action id="intellido.copyTopicLink"
+                    class="moe.momokko.intellido.ui.actions.CopyTopicLinkAction"
+                    text="Copy topic link"/>
+            <action id="intellido.resetLocalData"
+                    class="moe.momokko.intellido.ui.actions.ResetLocalDataAction"
+                    text="Delete all local data"/>
+            <action id="intellido.about"
+                    class="moe.momokko.intellido.ui.actions.AboutAction"
+                    text="About IntelliDo"/>
+            <separator/>
+            <action id="intellido.jcef.retry"
+                    class="moe.momokko.intellido.ui.actions.RetryJcefAction"
+                    text="Retry JCEF initialization"/>
+            <action id="intellido.jcef.openRepairGuide"
+                    class="moe.momokko.intellido.ui.actions.OpenJcefRepairGuideAction"
+                    text="Open repair instructions"/>
+            <action id="intellido.jcef.copyDiagnostics"
+                    class="moe.momokko.intellido.ui.actions.CopyJcefDiagnosticsAction"
+                    text="Copy diagnostics"/>
+            <action id="intellido.exit"
+                    class="moe.momokko.intellido.ui.actions.ExitAction"
+                    text="Exit IntelliDo"/>
+            <add-to-group group-id="MainMenu" anchor="last"/>
+        </group>
+    </actions>
+</idea-plugin>

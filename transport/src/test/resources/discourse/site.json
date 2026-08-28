@@ -1,0 +1,5 @@
+{
+  "default_archetype": "regular",
+  "long_polling_base_url": "https://ping.ldstatic.com/",
+  "user_fields": []
+}

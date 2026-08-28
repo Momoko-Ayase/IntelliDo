@@ -1,0 +1,6 @@
+Use case: precise-object-edit
+Asset type: application icon background correction for transparent extraction
+Input images: Image 1 is the approved IntelliDo icon source
+Primary request: replace only the outer background surrounding the yellow icon silhouette with perfectly flat solid #ff00ff chroma-key magenta
+Scene/backdrop: one uniform #ff00ff color extending to every canvas edge
+Constraints: change only the outer background; preserve the entire yellow, black, and white icon exactly, including its silhouette, ID letters, connection-node accent, proportions, edge geometry, internal shading, and padding; no shadow or glow outside the icon; no magenta inside the icon; no new elements; no text changes; no watermark; background must have no gradient, texture, lighting variation, floor plane, or reflection

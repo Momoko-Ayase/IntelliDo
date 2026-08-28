@@ -1,0 +1,19 @@
+{
+  "groups": [
+    {
+      "id": 1,
+      "name": "everyone",
+      "full_name": "所有人",
+      "user_count": 3,
+      "visibility_level": 0,
+      "bio_cooked": "<p>公开群组</p>"
+    },
+    {
+      "id": 2,
+      "name": "staff",
+      "full_name": "工作人员",
+      "user_count": 1,
+      "visibility_level": 1
+    }
+  ]
+}

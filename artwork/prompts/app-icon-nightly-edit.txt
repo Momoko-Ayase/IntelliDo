@@ -1,0 +1,8 @@
+Use case: precise-object-edit
+Asset type: Nightly master desktop application icon
+Input images: Image 1 is the IntelliDo stable icon source on a flat chroma-key background
+Primary request: preserve the stable icon exactly and add a compact, unmistakable Nightly badge at the lower-right edge
+Subject: the badge is a small black corner tab with two yellow diagonal caution stripes and one exact white uppercase letter "N"
+Style/medium: same flat vector-like geometry and hard edges as Image 1
+Text (verbatim): "N"
+Constraints: change only the lower-right badge area; keep the stable ID mark, palette, proportions, padding, flat #00ff00 background, and all other pixels visually unchanged; render N exactly once; no gradients; no shadows; no texture; no watermark; no other text; do not use #00ff00 inside the subject

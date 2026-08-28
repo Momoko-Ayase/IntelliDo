@@ -1,0 +1,12 @@
+Use case: stylized-concept
+Asset type: 16:9 desktop application splash artwork for IntelliDo
+Primary request: create a polished, restrained IntelliJ New UI-inspired startup artwork for a native community desktop client
+Scene/backdrop: deep near-black matte background with a disciplined grid of subtle charcoal panels and broad open negative space
+Subject: one large abstract composition derived from the IntelliDo icon language: interlocking yellow and white geometric planes suggesting threaded discussion, navigation, and connection; include a small black inset square carrying the exact white uppercase letters "ID"
+Style/medium: premium flat geometric editorial artwork, native desktop-tool aesthetic, crisp shapes, minimal depth, not a UI screenshot
+Composition/framing: 16:9 landscape; dominant geometry centered slightly off-axis; generous quiet margins suitable for a splash crop; no edge-critical detail
+Lighting/mood: confident, focused, technical, calm; extremely subtle tonal depth only
+Color palette: near-black #111111, charcoal #202124, white #FFFFFF, warm signal yellow #F6C344
+Text (verbatim): "ID"
+Constraints: render ID exactly once; no other text because product name and version will be overlaid natively; no LINUX DO logo; no JetBrains product logo; no app-window chrome; no browser; no screenshots; no people; no photorealism; no watermark; no noisy particles; no strong gradients; preserve clear contrast and readable negative space
+Avoid: cyberpunk neon, blue or purple accents, glowing circuitry, code rain, generic speech-bubble collage, marketing poster, glossy 3D render

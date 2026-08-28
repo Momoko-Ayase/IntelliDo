@@ -1,0 +1,23 @@
+{
+  "users": [
+    { "id": 22, "username": "helper", "avatar_template": "/user_avatar/linux.do/helper/{size}/2.png" }
+  ],
+  "topic_list": {
+    "more_topics_url": "/latest?page=2",
+    "topics": [
+      {
+        "id": 104,
+        "title": "第二页的话题",
+        "slug": "second-page-topic",
+        "posts_count": 1,
+        "reply_count": 0,
+        "last_posted_at": "2026-08-22T04:00:00.000Z",
+        "category_id": 2,
+        "tags": ["faq"],
+        "views": 12,
+        "pinned": false,
+        "posters": [{ "user_id": 22 }]
+      }
+    ]
+  }
+}

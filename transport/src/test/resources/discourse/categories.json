@@ -1,0 +1,35 @@
+{
+  "category_list": {
+    "categories": [
+      {
+        "id": 1,
+        "name": "公告",
+        "slug": "announcements",
+        "description_text": "站点公告",
+        "topic_count": 2,
+        "read_restricted": false,
+        "color": "F6C344",
+        "style_type": "icon",
+        "icon": "comments"
+      },
+      {
+        "id": 2,
+        "name": "使用指南",
+        "slug": "guides",
+        "description_text": "公开的使用说明",
+        "topic_count": 1,
+        "read_restricted": false
+      },
+      {
+        "id": 3,
+        "name": "网盘资源",
+        "slug": "cloud-asset",
+        "description_text": "网盘",
+        "topic_count": 1,
+        "read_restricted": false,
+        "icon": "hard-drive",
+        "parent_category_id": 1
+      }
+    ]
+  }
+}

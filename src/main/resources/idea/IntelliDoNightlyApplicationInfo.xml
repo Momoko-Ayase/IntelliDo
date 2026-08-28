@@ -1,0 +1,16 @@
+<component xmlns="http://jetbrains.org/intellij/schema/application-info">
+    <version major="0" minor="1" eap="true"/>
+    <company name="Momoko Ayase" shortName="Momokko" copyrightStart="2026" url="https://github.com/Momoko-Ayase/IntelliDo"/>
+    <build number="IU-262.9437.185" date="@build.date@"/>
+    <logo url="/branding/nightly/splash.png" textcolor="FFFFFF" progressColor="F6C344"/>
+    <icon svg="/branding/nightly/icons/icon.svg"
+          svg-small="/branding/nightly/icons/icon-16.svg"
+          size32="/branding/nightly/icons/icon-32.png"
+          size16="/branding/nightly/icons/icon-16.png"
+          ico="/branding/nightly/intellido.ico"/>
+    <names fullname="IntelliDo Nightly"
+           product="IntelliDo Nightly"
+           script="intellido"
+           motto="Unofficial LINUX DO Client"/>
+    <essential-plugin>moe.momokko.intellido</essential-plugin>
+</component>

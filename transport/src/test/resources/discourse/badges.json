@@ -1,0 +1,23 @@
+{
+  "badges": [
+    {
+      "id": 1,
+      "name": "首次发帖",
+      "description": "发布第一篇帖子",
+      "grant_count": 12,
+      "icon": "pencil",
+      "badge_type_id": 3
+    },
+    {
+      "id": 2,
+      "name": "善解人意",
+      "description": "收到多个赞",
+      "grant_count": 4,
+      "badge_type_id": 2
+    }
+  ],
+  "badge_types": [
+    { "id": 3, "name": "铜" },
+    { "id": 2, "name": "银" }
+  ]
+}

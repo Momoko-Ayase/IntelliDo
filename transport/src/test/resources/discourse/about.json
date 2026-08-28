@@ -1,0 +1,30 @@
+{
+  "about": {
+    "title": "LINUX DO",
+    "description": "这是本地 Fake 社区说明，供 IntelliDo 匿名只读浏览。",
+    "stats": {
+      "topic_count": 10,
+      "post_count": 20,
+      "user_count": 5,
+      "like_count": 30
+    },
+    "admins": [
+      {
+        "id": 1,
+        "username": "system",
+        "name": "系统",
+        "avatar_template": "/user_avatar/linux.do/system/{size}/1.png",
+        "title": "系统管理员",
+        "trust_level": 4
+      }
+    ],
+    "moderators": [
+      {
+        "id": 2,
+        "username": "helper",
+        "name": "助手",
+        "trust_level": 3
+      }
+    ]
+  }
+}

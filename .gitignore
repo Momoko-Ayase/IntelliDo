@@ -1,0 +1,94 @@
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ Platform Gradle Plugin (downloaded IDE, sandbox, runIde state)
+.intellijPlatform/
+
+# Kotlin compiler / incremental
+.kotlin/
+
+# IDE project files
+.idea/
+*.iml
+*.ipr
+*.iws
+*.iml.bak
+out/
+bin/
+.vscode/
+.cursor/
+.qodana/
+*.swp
+*~
+
+# Local machine config and secrets
+local.properties
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs, crashes, dumps
+*.log
+hs_err_pid*
+replay_pid*
+*.hprof
+*.dmp
+*.mdmp
+*.pid
+.attach_pid*
+
+# Local scratch: vendor extracts, javap, one-off scripts, smoke screenshots
+tmp/
+
+# Build-fetched Font Awesome / Twemoji (see scripts/vendor-lock.json)
+domain/src/main/resources/vendor/
+
+# Playwright / browser captures (may contain live LINUX DO pages)
+.playwright/
+.playwright-cli/
+test-results/
+playwright-report/
+blob-report/
+playwright/.auth/
+
+# Local agent / assistant state — do not publish transcripts or copied skills
+.claude/
+.codex/
+.agent/
+.windsurf/
+
+# Accidental captures dropped at the repo root (artwork lives under artwork/)
+/linux-do*.yml
+/linux-do*.yaml
+/linuxdo-*.yml
+/linuxdo-*.yaml
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+
+# Compiled leftovers
+*.class
+*.war
+*.ear
+*.orig
+*.rej
+*.bak
+*.tmp
+*.user

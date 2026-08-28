@@ -1,0 +1,83 @@
+{
+  "topics": [
+    {
+      "id": 101,
+      "title": "欢迎使用 IntelliDo",
+      "slug": "welcome-to-intellido",
+      "like_count": 120,
+      "created_at": "2026-08-22T01:00:00.000Z"
+    },
+    {
+      "id": 102,
+      "title": "如何阅读话题",
+      "slug": "how-to-read-topics",
+      "like_count": 8,
+      "created_at": "2026-08-22T02:00:00.000Z"
+    }
+  ],
+  "badges": [
+    {
+      "id": 1,
+      "name": "首次发帖",
+      "description": "发布第一篇帖子",
+      "icon": "pencil"
+    }
+  ],
+  "user_summary": {
+    "likes_given": 6,
+    "likes_received": 4,
+    "topics_entered": 12,
+    "posts_read_count": 40,
+    "days_visited": 9,
+    "topic_count": 1,
+    "post_count": 3,
+    "time_read": 3600,
+    "recent_time_read": 600,
+    "can_see_summary_stats": true,
+    "solved_count": 1,
+    "topic_ids": [101],
+    "replies": [
+      {
+        "post_number": 2,
+        "like_count": 8,
+        "created_at": "2026-08-22T02:00:00.000Z",
+        "topic_id": 102
+      }
+    ],
+    "links": [
+      {
+        "url": "https://example.test/docs",
+        "title": "IntelliDo 说明",
+        "clicks": 3,
+        "topic_id": 101
+      }
+    ],
+    "most_liked_by_users": [
+      {
+        "id": 1,
+        "username": "system",
+        "name": "系统",
+        "count": 4,
+        "avatar_template": "/user_avatar/linux.do/system/{size}/1_2.png"
+      }
+    ],
+    "most_liked_users": [
+      { "id": 1, "username": "system", "name": "系统", "count": 2 }
+    ],
+    "most_replied_to_users": [
+      { "id": 1, "username": "system", "name": "系统", "count": 1 }
+    ],
+    "badges": [{ "id": 1, "badge_id": 1, "count": 1 }],
+    "top_categories": [
+      {
+        "id": 1,
+        "name": "公告",
+        "color": "F6C344",
+        "topic_count": 2,
+        "post_count": 4,
+        "slug": "announcements",
+        "icon": "comments"
+      }
+    ]
+  }
+}

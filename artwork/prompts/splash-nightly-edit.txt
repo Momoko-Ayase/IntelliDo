@@ -1,0 +1,8 @@
+Use case: precise-object-edit
+Asset type: 16:9 IntelliDo Nightly splash artwork
+Input images: Image 1 is the stable IntelliDo splash artwork
+Primary request: preserve the stable splash composition and add a restrained Nightly distinction
+Subject: add a narrow lower-edge band made from alternating near-black and signal-yellow diagonal segments, plus one small black square at the far end containing the exact white uppercase letter "N"
+Style/medium: same premium flat geometric editorial style as Image 1
+Text (verbatim): "N"
+Constraints: change only the narrow lower-edge Nightly band; keep the stable artwork, ID mark, palette, proportions, negative space, and all other elements visually unchanged; render N exactly once; no other new text; no watermark; no glow; no 3D; do not cover the main composition

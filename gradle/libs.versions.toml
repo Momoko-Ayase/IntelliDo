@@ -1,0 +1,27 @@
+[versions]
+# Kotlin 2.4.x matches the stdlib bundled with IntelliJ Platform 2026.2 (2.4.0).
+# 2.4.10 is the 2.4 line bugfix used for compilation.
+kotlin = "2.4.10"
+# IntelliJ Platform Gradle Plugin 2.18.1 is the latest stable as of 2026-07-10.
+intellij-platform-gradle = "2.18.1"
+# Latest 2026.2 stable patch announced 2026-08-10. Community/Ultimate helpers
+# are legacy before 2025.3; 2026.2 uses the unified intellijIdea() target.
+intellijPlatform = "2026.2.1"
+junit = "5.13.4"
+# Apache-2.0 JSON parser for Discourse structured responses in transport tests/runtime.
+gson = "2.13.1"
+jsoup = "1.23.2"
+jspecify = "1.0.1"
+
+[libraries]
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.13.4" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+intellij-platform = { id = "org.jetbrains.intellij.platform", version.ref = "intellij-platform-gradle" }
+intellij-platform-module = { id = "org.jetbrains.intellij.platform.module", version.ref = "intellij-platform-gradle" }
+intellij-platform-settings = { id = "org.jetbrains.intellij.platform.settings", version.ref = "intellij-platform-gradle" }

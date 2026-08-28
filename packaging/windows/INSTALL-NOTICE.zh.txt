@@ -1,0 +1,1 @@
+IntelliDo 是非官方 LINUX DO 桌面客户端，并非由 LINUX DO 制作、认可或支持。

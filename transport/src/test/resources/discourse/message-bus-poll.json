@@ -1,0 +1,65 @@
+[
+  {
+    "global_id": 10,
+    "message_id": 4,
+    "channel": "/latest",
+    "data": {
+      "message_type": "latest",
+      "topic_id": 202,
+      "payload": {
+        "category_id": 5,
+        "archetype": "regular",
+        "bumped_at": "2026-08-26T01:00:00.000Z"
+      }
+    }
+  },
+  {
+    "global_id": 11,
+    "message_id": 8,
+    "channel": "/topic/101",
+    "data": {
+      "type": "created",
+      "id": 1003,
+      "post_number": 3,
+      "updated_at": "2026-08-26T01:00:01.000Z",
+      "user_id": 2,
+      "username": "helper"
+    }
+  },
+  {
+    "global_id": 12,
+    "message_id": 9,
+    "channel": "/topic/101",
+    "data": {
+      "type": "revised",
+      "id": 1001,
+      "post_number": 1,
+      "updated_at": "2026-08-26T01:00:02.000Z"
+    }
+  },
+  {
+    "global_id": 13,
+    "message_id": 2,
+    "channel": "/presence/discourse-presence/reply/101",
+    "data": {
+      "entering_users": [
+        {
+          "id": 2,
+          "username": "helper",
+          "name": "助手",
+          "avatar_template": "/user_avatar/linux.do/helper/{size}/2.png"
+        }
+      ],
+      "leaving_user_ids": []
+    }
+  },
+  {
+    "global_id": -1,
+    "message_id": -1,
+    "channel": "/__status",
+    "data": {
+      "/latest": 4,
+      "/topic/101": 9
+    }
+  }
+]

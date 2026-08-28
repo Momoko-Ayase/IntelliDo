@@ -1,0 +1,11 @@
+Use case: logo-brand
+Asset type: master desktop application icon for IntelliDo, an unofficial native LINUX DO client built on the IntelliJ Platform
+Primary request: create an original IDEA-style geometric product icon using the exact initials "ID" once
+Scene/backdrop: perfectly flat solid #00ff00 chroma-key background for local background removal
+Subject: a bold yellow outer geometric tile with subtly asymmetric clipped corners, containing a crisp black inner square and the exact white uppercase letters "ID"; add one small white geometric accent that suggests conversation or connection without resembling the official LINUX DO logo
+Style/medium: flat vector-like logo mark, minimal, precise, highly legible at 16 px through 512 px, strong silhouette
+Composition/framing: centered square icon with generous uniform padding; front-facing; balanced negative space
+Color palette: only near-black #111111, white #FFFFFF, and warm signal yellow #F6C344 inside the icon
+Text (verbatim): "ID"
+Constraints: render ID exactly once; original design; crisp hard-edged geometry; no gradient; no texture; no 3D; no bevel; no shadow; no reflection; no mockup; no watermark; no extra letters or words; do not reproduce the LINUX DO logo or any JetBrains product logo; background must be one perfectly uniform #00ff00 with no lighting variation; do not use #00ff00 inside the subject
+Avoid: rounded mobile-app squircle, browser imagery, globe imagery, code brackets, terminal glyphs, generic chat bubble as the entire mark, fine detail, thin strokes

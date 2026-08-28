@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 严重安全漏洞
+    url: https://github.com/Momoko-Ayase/IntelliDo/security/policy
+    about: 不要在公开 Issue 中报告。请按安全政策发送到 momokko@linux.do。

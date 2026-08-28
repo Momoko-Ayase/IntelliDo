@@ -1,0 +1,12 @@
+{
+  "fontawesome": {
+    "name": "fontawesome-free-6.7.2.tgz",
+    "url": "https://registry.npmjs.org/@fortawesome/fontawesome-free/-/fontawesome-free-6.7.2.tgz",
+    "sha256": "794284b4ac7f3e30825bbeea1a073f542c45dff83f8146625f600f1015c9d52b"
+  },
+  "discourseEmojis": {
+    "name": "discourse-emojis-v1.0.46.tar.gz",
+    "url": "https://github.com/discourse/discourse-emojis/archive/refs/tags/v1.0.46.tar.gz",
+    "sha256": "775cb909d10ac36f77108b7c260283a25d5a2ccee34768b3a6f662e7c85ad6b8"
+  }
+}

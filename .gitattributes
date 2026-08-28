@@ -1,0 +1,27 @@
+# Normalize text to LF so Windows checkouts and GitHub stay consistent.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.jar binary
+*.zip binary
+*.7z binary
+*.exe binary

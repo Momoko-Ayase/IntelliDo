@@ -1,0 +1,6 @@
+{
+  "user_fields": [
+    { "id": 3, "name": "阅读并认同社区准则", "show_on_profile": false },
+    { "id": 6, "name": "所属机构", "show_on_profile": true }
+  ]
+}

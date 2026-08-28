@@ -1,0 +1,85 @@
+name: 缺陷报告
+description: 报告 IntelliDo 的功能、界面或安装问题
+title: "[缺陷] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        严重安全漏洞（例如会话被盗、凭据泄漏、远程代码执行、可复用 Token）**不要**开公开 Issue，请直接发送到 [momokko@linux.do](mailto:momokko@linux.do)。
+
+        公开报告里不要粘贴 Cookie、Token、会话材料、私密话题/私信内容，或可用来登录 LINUX DO 的任何信息。
+
+  - type: checkboxes
+    id: security
+    attributes:
+      label: 公开报告确认
+      options:
+        - label: 这不是严重安全漏洞；若是，我会改发 momokko@linux.do，而不是开这个 Issue。
+          required: true
+        - label: 下文不含 Cookie、Token、会话材料、私密内容或可复用凭据。
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: IntelliDo 版本
+      description: 例如 0.1.0。Nightly 请附带构建信息（Help → About，或启动画面上的版本行）。
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: 发布通道
+      options:
+        - 稳定版
+        - Nightly
+        - 本机 runIde / 开发构建
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 实际结果
+      description: 发生了什么，以及为什么它是缺陷。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从启动 IntelliDo 写起。不要填写 LINUX DO 密码或一次性验证码。
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 可选。请先去掉 Cookie、Authorization 头、本机绝对路径中的用户名，以及私密帖文内容。
