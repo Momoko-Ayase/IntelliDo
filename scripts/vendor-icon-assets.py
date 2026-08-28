@@ -57,27 +57,38 @@ def member_rest(name: str) -> str:
     return normalized
 
 
+def path_matches(path: str, prefixes: tuple[str, ...]) -> bool:
+    return any(path == prefix or path.startswith(prefix.rstrip("/") + "/") for prefix in prefixes)
+
+
 def wanted_member(name: str, prefixes: tuple[str, ...]) -> bool:
-    rest = member_rest(name)
+    # Prefixes are relative to the archive root folder (npm `package/`, GitHub `repo-ver/`).
+    # Also accept the unstripped tar path so `package/svgs` still matches npm tarballs.
+    normalized = name.replace("\\", "/")
+    rest = member_rest(normalized)
     if any(ch in rest for ch in INVALID_WIN):
         return False
-    return any(rest == prefix or rest.startswith(prefix.rstrip("/") + "/") for prefix in prefixes)
+    return path_matches(rest, prefixes) or path_matches(normalized, prefixes)
 
 
 def extract_archive(archive: Path, dest: Path, prefixes: tuple[str, ...]) -> Path:
     stamp = dest / ".ok"
-    if dest.is_dir() and stamp.is_file():
+    stamp_body = "\n".join(prefixes) + "\n"
+    if dest.is_dir() and stamp.is_file() and stamp.read_text(encoding="utf-8") == stamp_body:
         return dest
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
     with tarfile.open(archive, "r:*") as tar:
         members = [member for member in tar.getmembers() if wanted_member(member.name, prefixes)]
+        if not members:
+            shutil.rmtree(dest, ignore_errors=True)
+            raise FileNotFoundError(f"no archive members matching {prefixes} in {archive}")
         try:
             tar.extractall(dest, members=members, filter="data")
         except TypeError:
             tar.extractall(dest, members=members)
-    stamp.write_text("ok\n", encoding="utf-8")
+    stamp.write_text(stamp_body, encoding="utf-8")
     return dest
 
 
@@ -217,7 +228,7 @@ def generate(lock: dict, cache: Path, output: Path) -> None:
     fa_root = extract_archive(
         fa_archive,
         cache / "extracted" / fa_meta["sha256"],
-        ("package/svgs", "package/LICENSE.txt"),
+        ("svgs", "LICENSE.txt"),
     )
     emoji_root = extract_archive(
         emoji_archive,
