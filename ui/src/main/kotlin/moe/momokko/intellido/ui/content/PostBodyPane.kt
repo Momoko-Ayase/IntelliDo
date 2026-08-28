@@ -71,7 +71,7 @@ class PostBodyPane(
         isOpaque = false
         isFocusable = true
         HashtagChips.register()
-        val copyStroke = KeyStroke.getKeyStroke(KeyEvent.VK_C, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx)
+        val copyStroke = KeyStroke.getKeyStroke(KeyEvent.VK_C, GuestUi.menuShortcutMask())
         getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(copyStroke, "copy-body")
         actionMap.put(
             "copy-body",

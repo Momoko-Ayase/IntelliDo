@@ -155,6 +155,7 @@ tasks.withType<KotlinCompile>().configureEach {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    systemProperty("java.awt.headless", "true")
 }
 
 tasks.named<ProcessResources>("processResources") {
@@ -305,6 +306,7 @@ subprojects {
         }
         tasks.withType<Test>().configureEach {
             useJUnitPlatform()
+            systemProperty("java.awt.headless", "true")
             testLogging {
                 events("passed", "skipped", "failed")
             }

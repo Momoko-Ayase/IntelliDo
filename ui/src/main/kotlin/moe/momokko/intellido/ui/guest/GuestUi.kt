@@ -1,5 +1,6 @@
 package moe.momokko.intellido.ui.guest
 
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
@@ -9,6 +10,7 @@ import moe.momokko.intellido.domain.icon.LinuxDoTagIcons
 import java.awt.Color
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.event.InputEvent
 import javax.swing.JComponent
 
 /**
@@ -66,6 +68,10 @@ object GuestUi {
         row.add(label)
         return row
     }
+
+    /** Mac meta / elsewhere ctrl. Avoids HeadlessToolkit.menuShortcutKeyMaskEx. */
+    fun menuShortcutMask(): Int =
+        if (SystemInfo.isMac) InputEvent.META_DOWN_MASK else InputEvent.CTRL_DOWN_MASK
 
     fun parseHex(hex: String?): Color? {
         val raw = hex?.trim()?.removePrefix("#") ?: return null

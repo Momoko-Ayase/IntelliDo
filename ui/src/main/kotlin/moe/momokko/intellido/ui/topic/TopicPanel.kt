@@ -43,7 +43,6 @@ import java.awt.Font
 import java.awt.Graphics
 import java.awt.Point
 import java.awt.Rectangle
-import java.awt.Toolkit
 import java.awt.event.KeyEvent
 import java.util.Locale
 import javax.swing.AbstractAction
@@ -131,7 +130,7 @@ class TopicPanel(
         south.add(newPostsBar, BorderLayout.NORTH)
         south.add(presenceBar, BorderLayout.SOUTH)
         add(south, BorderLayout.SOUTH)
-        val findStroke = KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx)
+        val findStroke = KeyStroke.getKeyStroke(KeyEvent.VK_F, GuestUi.menuShortcutMask())
         getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(findStroke, "find-topic")
         actionMap.put(
             "find-topic",
