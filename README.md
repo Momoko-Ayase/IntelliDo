@@ -38,7 +38,7 @@ Nightly 身份：
 ./gradlew runIde -Pintellido.channel=nightly
 ```
 
-版本选择依据见 [docs/toolchain.md](docs/toolchain.md)。产品决策见 [docs/adr/](docs/adr/)。术语见 [CONTEXT.md](CONTEXT.md)。贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+版本选择依据见 [docs/toolchain.md](docs/toolchain.md)。产品决策见 [docs/adr/](docs/adr/)。术语见 [CONTEXT.md](CONTEXT.md)。贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)。代理会话约束见 [AGENTS.md](AGENTS.md)。
 
 ## 许可
 
