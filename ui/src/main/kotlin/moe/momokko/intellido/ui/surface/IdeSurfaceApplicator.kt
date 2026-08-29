@@ -3,7 +3,10 @@ package moe.momokko.intellido.ui.surface
 import com.intellij.ide.actions.ActivateToolWindowAction
 import com.intellij.ide.ui.UISettings
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.Anchor
+import com.intellij.openapi.actionSystem.Constraints
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
@@ -24,6 +27,7 @@ object IdeSurfaceApplicator {
     ) {
         removeMainMenuGroups(actionManager, IdeSurfacePolicy.programmingMenuGroupIds)
         stripToolbarGroups(actionManager)
+        installAccountToolbar(actionManager)
         if (unregisterWidgets) {
             unregisterActions(
                 actionManager,
@@ -78,12 +82,22 @@ object IdeSurfaceApplicator {
     }
 
     private fun suppressToolWindow(project: Project, id: String) {
-        if (project.isDisposed || IdeSurfacePolicy.shouldKeepToolWindow(id, currentSession())) {
+        val keep = IdeSurfacePolicy.shouldKeepToolWindow(id, currentSession())
+        val window = ToolWindowManager.getInstance(project).getToolWindow(id)
+        if (keep) {
+            if (window != null && !window.isAvailable &&
+                (id.startsWith("LINUX DO") || id.startsWith("IntelliDo"))
+            ) {
+                ApplicationManager.getApplication().invokeLater {
+                    if (!project.isDisposed) {
+                        window.setAvailable(true)
+                    }
+                }
+            }
             return
         }
         removeActivateToolWindowAction(id)
-        val window = ToolWindowManager.getInstance(project).getToolWindow(id) ?: return
-        if (window.isAvailable) {
+        if (window != null && window.isAvailable) {
             window.setAvailable(false)
         }
     }
@@ -120,6 +134,26 @@ object IdeSurfaceApplicator {
             runCatching { mainMenu.remove(child) }
                 .onFailure { error -> logger.warn("Could not remove menu group $id", error) }
         }
+    }
+
+    private fun installAccountToolbar(manager: ActionManager) {
+        val account = manager.getAction("intellido.account") ?: return
+        val right = manager.getAction("MainToolbarRight") as? DefaultActionGroup ?: return
+        val children = right.childActionsOrStubs
+        val already = children.any { child -> manager.getId(child) == "intellido.account" }
+        if (already) {
+            return
+        }
+        val added = if (manager.getAction("SearchEverywhere") != null) {
+            runCatching { right.add(account, Constraints(Anchor.BEFORE, "SearchEverywhere"), manager) }
+        } else {
+            runCatching { right.add(account, Constraints.FIRST, manager) }
+        }
+        added.onFailure { error -> logger.warn("Could not add account control to MainToolbarRight", error) }
+        logger.info(
+            "MainToolbarRight: " +
+                right.childActionsOrStubs.mapNotNull { child -> manager.getId(child) }.joinToString(","),
+        )
     }
 
     private fun stripToolbarGroups(manager: ActionManager) {

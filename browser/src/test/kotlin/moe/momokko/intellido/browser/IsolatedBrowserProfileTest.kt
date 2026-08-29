@@ -14,8 +14,8 @@ class IsolatedBrowserProfileTest {
     lateinit var root: Path
 
     @Test
-    fun `anonymous profile is process-only under IntelliDo and wipes leftover cookies`() {
-        val leftover = root.resolve("jcef").resolve("stable").resolve("anonymous").resolve("Cookies")
+    fun `anonymous profile keeps disk cookies so Cloudflare clearance can survive restarts`() {
+        val leftover = root.resolve("jcef").resolve("stable").resolve("profile").resolve("Cookies")
         Files.createDirectories(leftover.parent)
         Files.writeString(leftover, "cookie=secret")
 
@@ -23,10 +23,10 @@ class IsolatedBrowserProfileTest {
         val settings = IsolatedBrowserProfiles.settingsFor(profile)
 
         assertEquals(BrowserPersistence.ProcessOnly, profile.persistence)
-        assertFalse(settings.persistSessionCookies)
+        assertTrue(settings.persistSessionCookies)
         assertTrue(settings.cachePath.startsWith(root))
         assertFalse(IsolatedBrowserProfiles.isForbiddenSystemBrowserPath(settings.cachePath))
-        assertFalse(Files.exists(leftover))
+        assertTrue(Files.exists(leftover))
         assertTrue(Files.isDirectory(settings.cachePath))
         assertFalse(settings.cachePath.toString().contains("Chrome", ignoreCase = true))
         assertFalse(settings.cachePath.toString().contains("Edge", ignoreCase = true))
@@ -50,12 +50,29 @@ class IsolatedBrowserProfileTest {
     }
 
     @Test
-    fun `anonymous prepare also wipes the default jcef_cache leftover`() {
+    fun `anonymous prepare does not wipe jcef_cache so clearance can persist`() {
         val leftover = root.resolve(IsolatedBrowserProfiles.DEFAULT_CACHE_DIR).resolve("Cookies")
         Files.createDirectories(leftover.parent)
         Files.writeString(leftover, "cookie=secret")
         IsolatedBrowserProfiles.prepareAnonymous(root, ReleaseChannel.STABLE)
-        assertTrue(Files.notExists(leftover))
+        assertTrue(Files.exists(leftover))
         assertTrue(IsolatedBrowserProfiles.CEF_SWITCHES.contains("--disable-extensions"))
+    }
+
+    @Test
+    fun `remembered profile keeps cookies and persists them to disk`() {
+        val leftover = root.resolve("jcef").resolve("stable").resolve("profile").resolve("Cookies")
+        Files.createDirectories(leftover.parent)
+        Files.writeString(leftover, "cookie=secret")
+
+        val profile = IsolatedBrowserProfiles.prepareRemembered(root, ReleaseChannel.STABLE)
+        val settings = IsolatedBrowserProfiles.settingsFor(profile)
+
+        assertEquals(BrowserPersistence.OsProtected, profile.persistence)
+        assertTrue(settings.persistSessionCookies)
+        assertTrue(Files.exists(leftover))
+        IsolatedBrowserProfiles.signOut(profile)
+        assertTrue(Files.notExists(leftover))
+        assertEquals(BrowserPersistence.ProcessOnly, IsolatedBrowserProfiles.signOut(profile).persistence)
     }
 }

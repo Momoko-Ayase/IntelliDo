@@ -15,7 +15,7 @@
 
 IntelliDo 是面向 **LINUX DO** 的**非官方**独立桌面客户端：基于 IntelliJ Platform 的独立产品，不是安装到 IDEA 的插件。
 
-当前 `0.x` 纵向切片：匿名 guest 经 JCEF 读取 `https://linux.do` 公开 JSON，并原生渲染。登录与写入尚未接通。`1.0.0` 留给已约定的完整范围。
+当前 `0.x` 纵向切片：匿名 guest 经 JCEF 读取 `https://linux.do` 公开 JSON 并原生渲染；登录走 LINUX DO 真实页面，会话留在 JCEF。写入、Connect 权威进度、私信、Chat 尚未接通。`1.0.0` 留给已约定的完整范围。
 
 禁止称作「IntelliDo 插件」「LINUX DO 插件」。获取、About、登录等身份边界必须出现「非官方 LINUX DO 客户端 / Unofficial LINUX DO Client」。
 
@@ -155,4 +155,4 @@ IntelliDo 是面向 **LINUX DO** 的**非官方**独立桌面客户端：基于 
 
 ## 当前切片
 
-登录、写入、后台托盘、Connect 权威进度、私信、Chat 等尚未接通。不要在任务范围之外「顺便」实现它们，也不要为它们加会破坏现有边界的捷径（第二条 HTTP 客户端、本地草稿、离线队列、多账户）。
+写入、后台托盘、Connect 权威进度、私信、Chat 等尚未接通。不要在任务范围之外「顺便」实现它们，也不要为它们加会破坏现有边界的捷径（第二条 HTTP 客户端、本地草稿、离线队列、多账户）。

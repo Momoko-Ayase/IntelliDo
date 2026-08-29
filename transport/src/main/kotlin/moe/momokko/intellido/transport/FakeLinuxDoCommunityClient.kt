@@ -15,6 +15,7 @@ import moe.momokko.intellido.domain.catalog.PublicMember
 import moe.momokko.intellido.domain.catalog.PublicProfile
 import moe.momokko.intellido.domain.catalog.PublicProfileSummary
 import moe.momokko.intellido.domain.search.SearchHit
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.domain.site.SiteSettings
 import moe.momokko.intellido.domain.topic.HomeTopic
 import moe.momokko.intellido.domain.topic.TopicFind
@@ -32,6 +33,12 @@ import java.time.Instant
 class FakeLinuxDoCommunityClient(
     private val topics: List<HomeTopic> = defaultTopics,
 ) : LinuxDoCommunityClient {
+    @Volatile
+    private var session: MemberSession = MemberSession.Anonymous
+
+    fun adoptSession(next: MemberSession) {
+        session = next
+    }
     override fun loadHomeTopics(page: Int): List<HomeTopic> = pageOf(topics + moreTopics, page)
 
     override fun loadHotTopics(page: Int): List<HomeTopic> =
@@ -177,6 +184,23 @@ class FakeLinuxDoCommunityClient(
             ?: error("unknown fake member $username")
     }
 
+    override fun loadCurrentSession(): MemberSession = session
+
+    override fun loadCreatedTopics(username: String, page: Int): List<HomeTopic> {
+        val name = username.trim()
+        if (name.isEmpty()) {
+            return emptyList()
+        }
+        val authored = (topics + moreTopics).filter { topic ->
+            topic.authorUsername.equals(name, ignoreCase = true)
+        }
+        return pageOf(authored, page)
+    }
+
+    override fun signOutRemote() {
+        session = MemberSession.Anonymous
+    }
+
     override fun loadPostReplies(postId: Long): List<TopicPost> {
         if (postId != 1001L) {
             return emptyList()
@@ -197,6 +221,14 @@ class FakeLinuxDoCommunityClient(
     companion object {
         const val LOCAL_ORIGIN: String = "intellido.test"
         const val PAGE_SIZE: Int = 3
+
+        val HELPER_SESSION: MemberSession.SignedIn = MemberSession.SignedIn(
+            username = "helper",
+            trustLevel = 2,
+            id = 2,
+            name = "助手",
+            avatarTemplate = "/user_avatar/linux.do/helper/{size}/2.png",
+        )
 
         val moreTopics: List<HomeTopic> = listOf(
             HomeTopic(

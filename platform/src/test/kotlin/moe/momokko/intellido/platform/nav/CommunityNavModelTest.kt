@@ -91,6 +91,19 @@ class CommunityNavModelTest {
     }
 
     @Test
+    fun `signed-in nav adds my posts without messages`() {
+        val texts = flatten(CommunityNavModel.signedIn(emptyList()))
+        assertEquals("TOPICS", texts[0])
+        assertEquals("MY_POSTS", texts[1])
+        assertFalse(texts.contains("MY_MESSAGES"))
+        val posts = CommunityNavModel.signedIn(emptyList())
+            .filterIsInstance<CommunityNavEntry.Action>()
+            .first { it.action == CommunityNavAction.MY_POSTS }
+        assertFalse(posts.needsSignIn)
+        assertEquals("user", posts.icon)
+    }
+
+    @Test
     fun `guest nav does not attach another category's icon or id to a seed name`() {
         val entries = CommunityNavModel.guest(
             listOf(

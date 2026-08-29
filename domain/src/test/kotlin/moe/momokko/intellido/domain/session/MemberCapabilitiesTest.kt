@@ -1,5 +1,6 @@
 package moe.momokko.intellido.domain.session
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,6 +25,22 @@ class MemberCapabilitiesTest {
         assertFalse(MemberCapabilities.isAvailable(session, MemberAction.CONNECT))
         assertFalse(MemberCapabilities.isAvailable(session, MemberAction.NOTIFICATION))
         assertFalse(MemberCapabilities.isAvailable(session, MemberAction.DRAFT))
+    }
+
+    @Test
+    fun `signed in session exposes avatar url from template`() {
+        val signed = MemberSession.SignedIn(
+            "helper",
+            trustLevel = 2,
+            id = 2,
+            name = "助手",
+            avatarTemplate = "/user_avatar/linux.do/helper/{size}/2.png",
+        )
+        assertEquals("助手", signed.displayLabel())
+        assertEquals(
+            "https://linux.do/user_avatar/linux.do/helper/48/2.png",
+            signed.avatarUrl(),
+        )
     }
 
     @Test

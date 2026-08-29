@@ -45,6 +45,12 @@ class HomeTopicsControllerTest {
     }
 
     @Test
+    fun `home controller created-by list stays on the fake corpus`() {
+        val controller = HomeTopicsController(FakeLinuxDoCommunityClient())
+        assertEquals(listOf(102L, 104L, 106L), controller.loadCreatedBy("helper").map { it.id })
+    }
+
+    @Test
     fun `home controller appends the next latest page`() {
         val controller = HomeTopicsController(FakeLinuxDoCommunityClient())
         assertEquals(3, controller.load().size)

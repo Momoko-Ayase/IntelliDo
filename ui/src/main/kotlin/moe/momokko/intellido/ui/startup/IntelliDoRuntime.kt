@@ -2,13 +2,21 @@ package moe.momokko.intellido.ui.startup
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import moe.momokko.intellido.browser.BrowserPersistence
 import moe.momokko.intellido.browser.IsolatedBrowserProfile
+import moe.momokko.intellido.browser.IsolatedBrowserProfiles
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.platform.home.HomeTopicsController
 import moe.momokko.intellido.platform.i18n.InMemoryLocalPreferenceStore
+import moe.momokko.intellido.platform.i18n.IntelliDoStrings
 import moe.momokko.intellido.platform.i18n.LocalPreferenceStore
+import com.intellij.openapi.ui.Messages
+import moe.momokko.intellido.platform.identity.InMemoryRememberedSessionStore
+import moe.momokko.intellido.platform.identity.RememberedSessionStore
 import moe.momokko.intellido.platform.reading.ReadingAppearance
 import moe.momokko.intellido.platform.reading.ReadingPreferences
 import moe.momokko.intellido.platform.identity.ProductIdentity
+import moe.momokko.intellido.ui.session.MemberSessionListener
 import moe.momokko.intellido.platform.instance.ApplicationInstanceCoordinator
 import moe.momokko.intellido.platform.instance.HeldInstanceLock
 import moe.momokko.intellido.platform.instance.InstanceHandoffWatcher
@@ -50,11 +58,18 @@ class IntelliDoRuntime {
         private set
     var topicPreview: TopicPreviewSession = TopicPreviewSession()
         private set
-    var session: moe.momokko.intellido.domain.session.MemberSession =
-        moe.momokko.intellido.domain.session.MemberSession.Anonymous
+    var session: MemberSession = MemberSession.Anonymous
+        private set
+    var remembered: RememberedSessionStore = InMemoryRememberedSessionStore()
+        private set
+    var suppressAutoReauth: Boolean = false
+    var persistWarning: Boolean = false
         private set
     var usesLiveCommunity: Boolean = false
         private set
+    @Volatile
+    private var memberSessionProbed: Boolean = false
+    private val memberSessionLock = Any()
     var mediaLoader: LinuxDoMediaLoader? = null
         private set
     var liveSession: GuestLiveSession? = null
@@ -71,21 +86,141 @@ class IntelliDoRuntime {
         lock: HeldInstanceLock?,
         preferences: LocalPreferenceStore,
         coordinator: ApplicationInstanceCoordinator? = null,
+        remembered: RememberedSessionStore = InMemoryRememberedSessionStore(),
     ) {
         this.identity = identity
         this.locale = locale
         this.instanceLock = lock
         this.coordinator = coordinator
         this.preferences = preferences
+        this.remembered = remembered
         this.welcomeVisibility = WelcomeVisibility(preferences)
         ReadingAppearance.replace(ReadingPreferences.load(preferences))
         this.communityClient = FakeLinuxDoCommunityClient()
         this.homeController = HomeTopicsController(communityClient)
         this.topicPreview = TopicPreviewSession()
-        this.session = moe.momokko.intellido.domain.session.MemberSession.Anonymous
+        this.session = MemberSession.Anonymous
+        this.suppressAutoReauth = false
+        this.persistWarning = false
         this.usesLiveCommunity = false
+        this.memberSessionProbed = false
         this.mediaLoader = null
         stopLiveSession()
+    }
+
+    fun applySession(next: MemberSession, persist: Boolean = true) {
+        val previous = session
+        if (previous == next) {
+            return
+        }
+        session = next
+        when (next) {
+            is MemberSession.SignedIn -> {
+                (communityClient as? FakeLinuxDoCommunityClient)?.adoptSession(next)
+                if (persist) {
+                    persistUsername(next.username)
+                }
+            }
+            MemberSession.Anonymous -> {
+                (communityClient as? FakeLinuxDoCommunityClient)?.adoptSession(next)
+                if (persist) {
+                    persistWarning = false
+                    runOffEdt { remembered.clear() }
+                }
+            }
+        }
+        val app = ApplicationManager.getApplication() ?: return
+        if (app.isDisposed) {
+            return
+        }
+        app.messageBus.syncPublisher(MemberSessionListener.TOPIC).sessionChanged(previous, next)
+    }
+
+    private fun applySessionBlocking(next: MemberSession) {
+        val app = ApplicationManager.getApplication()
+        if (app == null || app.isDisposed || app.isDispatchThread) {
+            applySession(next, persist = true)
+            return
+        }
+        val done = java.util.concurrent.CountDownLatch(1)
+        app.invokeLater {
+            try {
+                applySession(next, persist = true)
+            } finally {
+                done.countDown()
+            }
+        }
+        done.await(5, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
+    private fun persistUsername(username: String) {
+        runOffEdt {
+            val ok = remembered.remember(username)
+            persistWarning = !ok
+            if (!ok) {
+                val app = ApplicationManager.getApplication() ?: return@runOffEdt
+                app.invokeLater {
+                    if (app.isDisposed) {
+                        return@invokeLater
+                    }
+                    Messages.showWarningDialog(
+                        IntelliDoStrings.message("signIn.persistUnavailable", locale),
+                        IntelliDoStrings.message("signIn.title", locale),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun runOffEdt(work: () -> Unit) {
+        val app = ApplicationManager.getApplication()
+        if (app == null || app.isDisposed) {
+            work()
+            return
+        }
+        if (app.isDispatchThread) {
+            app.executeOnPooledThread(work)
+        } else {
+            work()
+        }
+    }
+
+    fun communityFetcher(): LinuxDoJsonFetcher? = jsonFetcher as? LinuxDoJsonFetcher
+
+    fun jcefClient(): com.intellij.ui.jcef.JBCefClient? =
+        (jsonFetcher as? moe.momokko.intellido.ui.jcef.JcefLinuxDoJsonFetcher)?.cefClient
+
+    fun invalidateCommunityOrigin() {
+        (jsonFetcher as? moe.momokko.intellido.ui.jcef.JcefLinuxDoJsonFetcher)?.invalidateOrigin()
+        communityClient.invalidateCatalog()
+    }
+
+    /**
+     * Probe `/session/current.json` once, before Home's first `/latest.json`.
+     * Cookies already decide the member; this only updates native UI so the
+     * toolbar is not still anonymous while topics load.
+     */
+    fun ensureMemberSession() {
+        if (memberSessionProbed) {
+            return
+        }
+        synchronized(memberSessionLock) {
+            if (memberSessionProbed) {
+                return
+            }
+            val loaded = runCatching { communityClient.loadCurrentSession() }
+                .getOrDefault(MemberSession.Anonymous)
+            memberSessionProbed = true
+            applySessionBlocking(loaded)
+        }
+    }
+
+    fun wipeBrowserProfile() {
+        runCatching { communityFetcher()?.clearCookies() }
+        val profile = browserProfile ?: return
+        browserProfile = runCatching { IsolatedBrowserProfiles.signOut(profile) }.getOrElse {
+            profile.copy(persistence = BrowserPersistence.ProcessOnly)
+        }
     }
 
     fun attachBrowserProfile(profile: IsolatedBrowserProfile) {
@@ -100,10 +235,18 @@ class IntelliDoRuntime {
         communityClient = BridgedLinuxDoCommunityClient(fetcher)
         homeController = HomeTopicsController(communityClient)
         usesLiveCommunity = true
-        startLiveSession(fetcher)
-        ApplicationManager.getApplication().executeOnPooledThread {
-            runCatching { communityClient.loadCategories() }
+    }
+
+    /**
+     * MessageBus and site settings wait until Home has painted once so the first
+     * `/latest.json` is not stuck behind a 40s long-poll or a competing GET.
+     */
+    fun ensureLiveSession() {
+        if (liveSession != null || !usesLiveCommunity) {
+            return
         }
+        val fetcher = jsonFetcher as? LinuxDoJsonFetcher ?: return
+        startLiveSession(fetcher)
     }
 
     fun preferFakeTransport(): Boolean =

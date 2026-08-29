@@ -40,6 +40,152 @@ class DiscourseJsonMapperTest {
     }
 
     @Test
+    fun `trust gated nested subcategory still names the topic chip`() {
+        val categories = mapper.categories(
+            """
+            {
+              "category_list": {
+                "categories": [
+                  {
+                    "id": 4,
+                    "name": "开发调优",
+                    "slug": "develop",
+                    "topic_count": 8,
+                    "read_restricted": false,
+                    "color": "00AEFF",
+                    "icon": "code",
+                    "subcategory_list": [
+                      {
+                        "id": 401,
+                        "name": "开发调优",
+                        "slug": "develop-lv1",
+                        "topic_count": 3,
+                        "read_restricted": true,
+                        "parent_category_id": 4,
+                        "min_trust_level": 1,
+                        "color": "00AEFF",
+                        "icon": "code"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+        )
+        assertEquals(2, categories.size)
+        val gated = categories.first { it.id == 401L }
+        assertTrue(gated.readRestricted)
+        assertEquals(1, gated.minTrustLevel)
+        val topics = mapper.homeTopics(
+            """
+            {
+              "users": [{ "id": 22, "username": "helper" }],
+              "topic_list": {
+                "topics": [
+                  {
+                    "id": 501,
+                    "title": "JCEF 过盾",
+                    "slug": "jcef-challenge",
+                    "posts_count": 1,
+                    "reply_count": 0,
+                    "last_posted_at": "2026-08-29T00:00:00.000Z",
+                    "category_id": 401,
+                    "posters": [{ "user_id": 22 }]
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+            categories,
+        )
+        assertEquals("开发调优, Lv1", topics.single().categoryName)
+        assertEquals("00AEFF", topics.single().categoryColor)
+    }
+
+    @Test
+    fun `compact site json still names trust gated subcategories`() {
+        val categories = mapper.categories(
+            """
+            {
+              "default_archetype": "regular",
+              "categories": [
+                {
+                  "id": 42,
+                  "name": "搞七捻三",
+                  "slug": "gossip",
+                  "color": "43A047",
+                  "icon": "droplet",
+                  "read_restricted": false
+                },
+                {
+                  "id": 421,
+                  "name": "搞七捻三, Lv1",
+                  "slug": "gossip-lv1",
+                  "read_restricted": true,
+                  "parent_category_id": 42
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val gated = categories.first { it.id == 421L }
+        assertEquals("droplet", gated.icon)
+        assertEquals("搞七捻三, Lv1", gated.listLabel())
+        val topics = mapper.homeTopics(
+            """
+            {
+              "users": [{ "id": 22, "username": "helper" }],
+              "topic_list": {
+                "topics": [
+                  {
+                    "id": 7,
+                    "title": "手头的 token 有点多",
+                    "slug": "tokens",
+                    "category_id": 421,
+                    "tags": ["人工智能"],
+                    "posters": [{ "user_id": 22 }],
+                    "last_posted_at": "2026-08-29T00:00:00.000Z"
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+            categories,
+        )
+        assertEquals("搞七捻三, Lv1", topics.single().categoryName)
+        assertEquals(true, topics.single().categoryRestricted)
+    }
+
+    @Test
+    fun `topic embedded category name is used when the catalog misses`() {
+        val topics = mapper.homeTopics(
+            """
+            {
+              "users": [{ "id": 22, "username": "helper" }],
+              "topic_list": {
+                "topics": [
+                  {
+                    "id": 8,
+                    "title": "catalog miss",
+                    "slug": "miss",
+                    "category_id": 421,
+                    "category": { "name": "搞七捻三, Lv1", "read_restricted": true, "icon": "droplet" },
+                    "posters": [{ "user_id": 22 }],
+                    "last_posted_at": "2026-08-29T00:00:00.000Z"
+                  }
+                ]
+              }
+            }
+            """.trimIndent(),
+            emptyList(),
+        )
+        assertEquals("搞七捻三, Lv1", topics.single().categoryName)
+        assertEquals(true, topics.single().categoryRestricted)
+        assertEquals("droplet", topics.single().categoryIcon)
+    }
+
+    @Test
     fun `topic json becomes a native cooked thread`() {
         val categories = mapper.categories(resource("discourse/categories.json"))
         val thread = mapper.topicThread(resource("discourse/topic.json"), categories)
@@ -277,6 +423,23 @@ class DiscourseJsonMapperTest {
         assertEquals("欢迎使用 IntelliDo", hits.first().title)
         assertEquals(1, hits.last().postNumber)
         assertEquals("system", hits.last().username)
+    }
+
+    @Test
+    fun `session current json becomes a signed-in member`() {
+        val session = mapper.currentSession(resource("discourse/session-current.json"))
+        val signed = session as moe.momokko.intellido.domain.session.MemberSession.SignedIn
+        assertEquals("helper", signed.username)
+        assertEquals(2, signed.trustLevel)
+        assertEquals(2L, signed.id)
+        assertEquals("助手", signed.name)
+        assertEquals("/user_avatar/linux.do/helper/{size}/2.png", signed.avatarTemplate)
+        assertTrue(
+            mapper.currentSession(resource("discourse/session-current-anonymous.json"))
+                is moe.momokko.intellido.domain.session.MemberSession.Anonymous,
+        )
+        assertTrue(mapper.currentSession("<html>nope</html>") is moe.momokko.intellido.domain.session.MemberSession.Anonymous)
+        assertEquals("csrf-token", mapper.csrfToken("""{"csrf":"csrf-token"}"""))
     }
 
     @Test

@@ -285,6 +285,35 @@ object IntelliDoWorkspace {
         homeEditor(project)?.showLatest()
     }
 
+    fun openCreatedTopics(project: Project, username: String) {
+        focusHome(project)
+        homeEditor(project)?.showCreatedBy(username)
+    }
+
+    fun closeNonHomeTabs(project: Project) {
+        if (project.isDisposed) {
+            return
+        }
+        val manager = FileEditorManager.getInstance(project)
+        manager.openFiles.filter { file -> !isHomeFile(file) }.forEach { file -> manager.closeFile(file) }
+        service<IntelliDoRuntime>().topicPreview.clear()
+    }
+
+    fun applyAnonymousHome(project: Project) {
+        closeNonHomeTabs(project)
+        IdeSurfaceApplicator.applyProjectSurface(project)
+        homeEditor(project)?.refresh()
+        focusHome(project)
+    }
+
+    fun onSessionChanged(project: Project) {
+        if (project.isDisposed) {
+            return
+        }
+        IdeSurfaceApplicator.applyProjectSurface(project)
+        homeEditor(project)?.refresh()
+    }
+
     fun openCategoryTopics(project: Project, categoryId: Long) {
         focusHome(project)
         homeEditor(project)?.showCategory(categoryId)

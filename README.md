@@ -8,7 +8,7 @@ IntelliDo 并非由 LINUX DO 官方制作、认可或支持。
 
 ## 当前状态
 
-本仓库已有可运行的 `0.x` 纵向切片。匿名 guest 通过 JCEF 读取 `https://linux.do` 公开 JSON 并原生渲染；测试与 CI 只用 Fake。登录与写入尚未接通。`1.0.0` 留给已约定的完整范围。
+本仓库已有可运行的 `0.x` 纵向切片。匿名 guest 通过 JCEF 读取 `https://linux.do` 公开 JSON 并原生渲染；登录走 LINUX DO 真实页面，会话留在 JCEF。测试与 CI 只用 Fake。写入尚未接通。`1.0.0` 留给已约定的完整范围。
 
 自动测试和 CI **不会**连接 linux.do、创建社区内容或上报阅读活动。
 

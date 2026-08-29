@@ -24,4 +24,26 @@ object CommunityCategories {
             }
         }
     }
+
+    /**
+     * Copy parent colour / icon onto children that omitted them. LINUX DO
+     * trust-gated subcategories often only send a name and `read_restricted`.
+     */
+    fun inheritParents(categories: List<CommunityCategory>): List<CommunityCategory> {
+        val byId = categories.associateBy { it.id }
+        return categories.map { category ->
+            val parent = category.parentId?.let { byId[it] } ?: return@map category
+            category.copy(
+                color = category.color?.takeIf { it.isNotBlank() } ?: parent.color,
+                icon = category.icon?.takeIf { it.isNotBlank() } ?: parent.icon,
+            )
+        }
+    }
+
+    fun merge(primary: List<CommunityCategory>, extra: List<CommunityCategory>): List<CommunityCategory> {
+        val byId = linkedMapOf<Long, CommunityCategory>()
+        extra.forEach { category -> byId[category.id] = category }
+        primary.forEach { category -> byId[category.id] = category }
+        return inheritParents(byId.values.toList())
+    }
 }

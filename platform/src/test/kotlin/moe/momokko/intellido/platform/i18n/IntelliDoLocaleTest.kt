@@ -41,5 +41,8 @@ class IntelliDoLocaleTest {
         assertEquals("复制链接", IntelliDoStrings.message("topic.copyLink", zh))
         assertEquals("查看 2 个新帖子", IntelliDoStrings.message("topic.newPosts", zh, 2))
         assertEquals("清除所有本地数据", IntelliDoStrings.message("reset.title", zh))
+        assertEquals("退出登录", IntelliDoStrings.message("action.signOut", zh))
+        assertEquals("登录", IntelliDoStrings.message("account.placeholder", zh))
+        assertEquals("本切片尚未接通", IntelliDoStrings.message("toolwindow.notInSlice", zh))
     }
 }

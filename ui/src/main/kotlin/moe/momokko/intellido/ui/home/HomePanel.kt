@@ -52,6 +52,7 @@ class HomePanel(
         data object Top : Filter()
         data class Category(val id: Long) : Filter()
         data class Tag(val name: String) : Filter()
+        data class CreatedBy(val username: String) : Filter()
     }
 
     init {
@@ -138,6 +139,7 @@ class HomePanel(
                 Filter.Top -> runtime().homeController.loadTop()
                 is Filter.Category -> runtime().homeController.loadCategory(current.id)
                 is Filter.Tag -> runtime().homeController.loadTag(current.name)
+                is Filter.CreatedBy -> runtime().homeController.loadCreatedBy(current.username)
             }
         }
     }
@@ -171,6 +173,10 @@ class HomePanel(
 
     fun showTag(name: String) {
         loadFilter(Filter.Tag(name)) { runtime().homeController.loadTag(name) }
+    }
+
+    fun showCreatedBy(username: String) {
+        loadFilter(Filter.CreatedBy(username)) { runtime().homeController.loadCreatedBy(username) }
     }
 
     private fun loadFilter(next: Filter, block: () -> List<HomeTopic>) {
@@ -224,7 +230,7 @@ class HomePanel(
         }
         ApplicationManager.getApplication().executeOnPooledThread {
             runtime().awaitCommunity()
-            bindLive()
+            runtime().ensureMemberSession()
             val result = runCatching(block)
             ApplicationManager.getApplication().invokeLater {
                 loading = false
@@ -241,6 +247,8 @@ class HomePanel(
                 result.onSuccess { topics ->
                     topicTable.replace(topics)
                     loadAvatars(topics)
+                    runtime().ensureLiveSession()
+                    bindLive()
                 }.onFailure {
                     topicTable.showFailed()
                 }

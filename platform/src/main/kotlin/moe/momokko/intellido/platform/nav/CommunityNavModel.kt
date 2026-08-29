@@ -59,8 +59,28 @@ object CommunityNavModel {
     fun guest(
         categories: List<CommunityCategory>,
         tags: List<CommunityTag> = emptyList(),
+    ): List<CommunityNavEntry> = entries(signedIn = false, categories, tags)
+
+    fun signedIn(
+        categories: List<CommunityCategory>,
+        tags: List<CommunityTag> = emptyList(),
+    ): List<CommunityNavEntry> = entries(signedIn = true, categories, tags)
+
+    fun forSession(
+        signedIn: Boolean,
+        categories: List<CommunityCategory>,
+        tags: List<CommunityTag> = emptyList(),
+    ): List<CommunityNavEntry> = entries(signedIn, categories, tags)
+
+    private fun entries(
+        signedIn: Boolean,
+        categories: List<CommunityCategory>,
+        tags: List<CommunityTag>,
     ): List<CommunityNavEntry> = buildList {
         add(CommunityNavEntry.Action(CommunityNavAction.TOPICS, "nav.topics", icon = "layer-group"))
+        if (signedIn) {
+            add(CommunityNavEntry.Action(CommunityNavAction.MY_POSTS, "nav.myPosts", icon = "user"))
+        }
         add(CommunityNavEntry.Link("nav.recent", "https://linux.do/upcoming-events", "calendar"))
         add(
             CommunityNavEntry.Group(

@@ -8,6 +8,7 @@ import moe.momokko.intellido.domain.catalog.CommunityTag
 import moe.momokko.intellido.domain.catalog.PublicMember
 import moe.momokko.intellido.domain.catalog.PublicProfile
 import moe.momokko.intellido.domain.search.SearchHit
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.domain.site.SiteSettings
 import moe.momokko.intellido.domain.topic.HomeTopic
 import moe.momokko.intellido.domain.topic.TopicPost
@@ -63,6 +64,14 @@ interface LinuxDoCommunityClient {
     fun loadSiteSettings(): SiteSettings = SiteSettings()
 
     fun loadPublicProfile(username: String): PublicProfile
+
+    fun loadCurrentSession(): MemberSession = MemberSession.Anonymous
+
+    fun invalidateCatalog() = Unit
+
+    fun loadCreatedTopics(username: String, page: Int = 0): List<HomeTopic> = emptyList()
+
+    fun signOutRemote() = Unit
 
     fun loadPostReplies(postId: Long): List<TopicPost> = emptyList()
 

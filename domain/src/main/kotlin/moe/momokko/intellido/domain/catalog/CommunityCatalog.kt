@@ -10,12 +10,35 @@ data class CommunityCategory(
     val color: String? = null,
     val icon: String? = null,
     val parentId: Long? = null,
+    val minTrustLevel: Int? = null,
 ) {
     init {
         require(id > 0) { "category id must be positive" }
         require(name.isNotBlank()) { "category name must not be blank" }
         require(slug.isNotBlank()) { "category slug must not be blank" }
         require(topicCount >= 0) { "topicCount must not be negative" }
+    }
+
+    /**
+     * LINUX DO paints trust-gated subcategories as `开发调优, Lv1`. Keep the
+     * category chip even when [readRestricted] is true — that flag means the
+     * category has a permission gate, not that this member cannot see it.
+     */
+    fun listLabel(parent: CommunityCategory? = null): String {
+        val level = minTrustLevel?.takeIf { it in 1..4 }
+        val base = name.trim()
+        if (level == null) {
+            return base
+        }
+        if (Regex(",\\s*Lv\\d+$", RegexOption.IGNORE_CASE).containsMatchIn(base)) {
+            return base
+        }
+        val head = if (parent != null && (base.isEmpty() || base.equals(parent.name, ignoreCase = true))) {
+            parent.name
+        } else {
+            base
+        }
+        return "$head, Lv$level"
     }
 }
 

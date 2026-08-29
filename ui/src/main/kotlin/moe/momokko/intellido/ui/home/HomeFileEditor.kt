@@ -53,6 +53,14 @@ class HomeFileEditor(
         panel.showTag(name)
     }
 
+    fun showCreatedBy(username: String) {
+        panel.showCreatedBy(username)
+    }
+
+    fun refresh() {
+        panel.refresh()
+    }
+
     override fun getFile(): VirtualFile = file
 
     override fun getComponent(): JComponent = panel

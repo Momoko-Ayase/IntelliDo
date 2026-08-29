@@ -43,7 +43,15 @@ class DirectoryRenderer(
         when (row) {
             is DirectoryRow.Topic -> {
                 row.topic.categoryName?.let { name ->
-                    panel.add(GuestUi.categoryBadge(name, row.topic.categoryColor, row.topic.categoryIcon), BorderLayout.WEST)
+                    panel.add(
+                        GuestUi.categoryBadge(
+                            name,
+                            row.topic.categoryColor,
+                            row.topic.categoryIcon,
+                            restricted = row.topic.categoryRestricted,
+                        ),
+                        BorderLayout.WEST,
+                    )
                 }
                 val title = JBLabel(row.topic.title)
                 title.foreground = fg
@@ -51,7 +59,15 @@ class DirectoryRenderer(
                 panel.add(title, BorderLayout.CENTER)
             }
             is DirectoryRow.Category -> {
-                panel.add(GuestUi.categoryBadge(row.category.name, row.category.color, row.category.icon), BorderLayout.WEST)
+                panel.add(
+                    GuestUi.categoryBadge(
+                        row.category.listLabel(),
+                        row.category.color,
+                        row.category.icon,
+                        restricted = row.category.readRestricted,
+                    ),
+                    BorderLayout.WEST,
+                )
                 panel.add(column(row.category.name, row.category.description, fg, muted), BorderLayout.CENTER)
                 panel.add(count(row.category.topicCount, muted), BorderLayout.EAST)
             }

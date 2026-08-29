@@ -25,7 +25,13 @@ abstract class PlaceholderToolWindowFactory(private val titleKey: String) : Tool
         column.isOpaque = false
         column.border = JBUI.Borders.empty(12)
         column.add(JBLabel(IntelliDoStrings.message(titleKey, locale)))
-        val hint = JBLabel(IntelliDoStrings.message("toolwindow.needsSignIn", locale))
+        val session = runCatching { service<IntelliDoRuntime>().session }.getOrNull()
+        val hintKey = if (session is moe.momokko.intellido.domain.session.MemberSession.SignedIn) {
+            "toolwindow.notInSlice"
+        } else {
+            "toolwindow.needsSignIn"
+        }
+        val hint = JBLabel(IntelliDoStrings.message(hintKey, locale))
         hint.foreground = GuestUi.muted
         hint.font = GuestUi.metaFont(hint.font)
         hint.border = JBUI.Borders.emptyTop(6)

@@ -153,7 +153,14 @@ class HomeTopicRenderer(
         meta.alignmentX = Component.LEFT_ALIGNMENT
         meta.maximumSize = Dimension(textWidth, Integer.MAX_VALUE)
         topic.categoryName?.let { name ->
-            meta.add(GuestUi.categoryBadge(name, topic.categoryColor, topic.categoryIcon))
+            meta.add(
+                GuestUi.categoryBadge(
+                    name,
+                    topic.categoryColor,
+                    topic.categoryIcon,
+                    restricted = topic.categoryRestricted,
+                ),
+            )
         }
         topic.tags.forEach { tag ->
             meta.add(GuestUi.tagBadge(tag))

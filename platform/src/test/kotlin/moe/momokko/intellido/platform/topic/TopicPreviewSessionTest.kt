@@ -42,4 +42,14 @@ class TopicPreviewSessionTest {
         assertEquals(101L, snapshot.focusedTopicId)
         assertNull(snapshot.previewTopicId)
     }
+
+    @Test
+    fun `clear drops every topic tab`() {
+        val session = TopicPreviewSession()
+        session.activate(101, pin = true)
+        session.activate(102)
+        session.clear()
+        assertEquals(emptyList<Long>(), session.snapshot().tabs.map { it.topicId })
+        assertNull(session.snapshot().focusedTopicId)
+    }
 }

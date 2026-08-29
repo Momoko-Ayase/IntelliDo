@@ -435,7 +435,14 @@ class TopicPanel(
         meta.isOpaque = false
         meta.alignmentX = LEFT_ALIGNMENT
         thread.topic.categoryName?.let { name ->
-            meta.add(GuestUi.categoryBadge(name, thread.topic.categoryColor, thread.topic.categoryIcon))
+            meta.add(
+                GuestUi.categoryBadge(
+                    name,
+                    thread.topic.categoryColor,
+                    thread.topic.categoryIcon,
+                    restricted = thread.topic.categoryRestricted,
+                ),
+            )
         }
         thread.topic.tags.forEach { tag ->
             meta.add(GuestUi.tagBadge(tag))

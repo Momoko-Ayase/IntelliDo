@@ -31,13 +31,11 @@ class JcefChallengeDialog(
     private val locale: Locale,
 ) {
     fun awaitPassed() {
-        val result = CompletableFuture<Boolean>()
-        val show = Runnable { open(result) }
-        if (ApplicationManager.getApplication().isDispatchThread) {
-            show.run()
-        } else {
-            ApplicationManager.getApplication().invokeLater(show)
+        check(!ApplicationManager.getApplication().isDispatchThread) {
+            "Cloudflare challenge must wait off the EDT"
         }
+        val result = CompletableFuture<Boolean>()
+        ApplicationManager.getApplication().invokeLater { open(result) }
         try {
             result.get(5, TimeUnit.MINUTES)
         } catch (error: Exception) {
@@ -53,11 +51,12 @@ class JcefChallengeDialog(
         val browser = JBCefBrowser.createBuilder()
             .setClient(client)
             .setOffScreenRendering(false)
+            .setCreateImmediately(true)
             .setUrl(page)
             .build()
         val query = JBCefJSQuery.create(browser as JBCefBrowserBase)
         val done = AtomicBoolean(false)
-        val sawTurnstile = AtomicBoolean(false)
+        val shown = AtomicBoolean(false)
         val owner = WindowManager.getInstance().findVisibleFrame()
         val dialog = JDialog(owner, IntelliDoStrings.message("challenge.title", locale), true)
         dialog.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
@@ -95,44 +94,13 @@ class JcefChallengeDialog(
             nativeStaysInCef = true,
         )
 
-        fun finish(passed: Boolean) {
-            if (!done.compareAndSet(false, true)) {
-                return
-            }
-            if (passed) {
-                result.complete(true)
-            } else {
-                result.completeExceptionally(IllegalStateException("cancelled"))
-            }
-            ApplicationManager.getApplication().invokeLater {
-                if (dialog.isDisplayable) {
-                    dialog.dispose()
-                }
-            }
-        }
-
-        query.addHandler { payload ->
-            val probe = CloudflareChallenge.parsePageProbe(payload)
-            if (probe.turnstile) {
-                sawTurnstile.set(true)
-            }
-            val passed = CloudflareChallenge.dialogMayClose(probe, sawTurnstile.get()) &&
-                CloudflareChallenge.isLinuxDoHost(browser.cefBrowser.url.orEmpty())
-            if (passed) {
-                logger.info("Challenge passed on ${probe.url} ready=${probe.ready} sawTurnstile=${sawTurnstile.get()}")
-                finish(true)
-            }
-            JBCefJSQuery.Response("")
-        }
         val script = PROBE_JS.replace("CALLBACK", query.inject("payload"))
         fun probe() {
-            if (done.get() || !dialog.isDisplayable) {
+            if (done.get()) {
                 return
             }
             browser.cefBrowser.executeJavaScript(script, page, 0)
         }
-        val timer = Timer(100) { probe() }
-        timer.start()
         val loadHandler = object : org.cef.handler.CefLoadHandlerAdapter() {
             override fun onLoadingStateChange(
                 cefBrowser: org.cef.browser.CefBrowser,
@@ -145,41 +113,117 @@ class JcefChallengeDialog(
                 }
             }
         }
+        lateinit var timer: Timer
+        lateinit var revealTimer: Timer
+
+        fun showWindow() {
+            if (done.get() || !shown.compareAndSet(false, true)) {
+                return
+            }
+            logger.info("Showing Cloudflare challenge dialog")
+            dialog.isVisible = true
+        }
+
+        fun finish(passed: Boolean) {
+            if (!done.compareAndSet(false, true)) {
+                return
+            }
+            timer.stop()
+            revealTimer.stop()
+            runCatching { browser.jbCefClient.removeLoadHandler(loadHandler, browser.cefBrowser) }
+            runCatching { browser.jbCefClient.removeAllHandlers(browser.cefBrowser) }
+            query.dispose()
+            browser.dispose()
+            if (passed) {
+                result.complete(true)
+            } else {
+                result.completeExceptionally(IllegalStateException("cancelled"))
+            }
+            if (dialog.isDisplayable) {
+                dialog.dispose()
+            }
+        }
+
+        query.addHandler { payload ->
+            val pageProbe = CloudflareChallenge.parsePageProbe(payload)
+            val passed = CloudflareChallenge.dialogMayClose(pageProbe)
+            if (passed) {
+                logger.info(
+                    "Challenge passed on ${pageProbe.url} passedJson=${pageProbe.passed} " +
+                        "csrf=${CloudflareChallenge.isCsrfPassPayload(pageProbe.text)} " +
+                        "shown=${shown.get()} turnstile=${pageProbe.turnstile}",
+                )
+                JcefLinuxDoCookies.flush()
+                ApplicationManager.getApplication().invokeLater { finish(true) }
+            } else if (pageProbe.turnstile) {
+                ApplicationManager.getApplication().invokeLater { showWindow() }
+            }
+            JBCefJSQuery.Response("")
+        }
+        timer = Timer(400) { probe() }
+        timer.start()
+        revealTimer = Timer(1_800) { showWindow() }
+        revealTimer.isRepeats = false
+        revealTimer.start()
         browser.jbCefClient.addLoadHandler(loadHandler, browser.cefBrowser)
         dialog.addWindowListener(object : java.awt.event.WindowAdapter() {
             override fun windowClosed(e: java.awt.event.WindowEvent) {
-                timer.stop()
-                browser.jbCefClient.removeLoadHandler(loadHandler, browser.cefBrowser)
-                browser.jbCefClient.removeAllHandlers(browser.cefBrowser)
-                query.dispose()
-                browser.dispose()
                 finish(false)
             }
         })
-        try {
-            dialog.isVisible = true
-        } finally {
-            if (!done.get()) {
-                finish(false)
-            }
-        }
+        probe()
     }
 
     companion object {
         private val logger = Logger.getInstance(JcefChallengeDialog::class.java)
+        private val flight = JcefSingleFlight()
+
+        /**
+         * One visible challenge at a time. Extra callers wait for the in-flight
+         * dialog instead of stacking more modal windows on the nested EDT pump.
+         */
+        fun awaitPassed(client: JBCefClient, locale: Locale) {
+            flight.run {
+                JcefChallengeDialog(client, locale).awaitPassed()
+            }
+        }
 
         const val PROBE_JS: String =
             "(function(){" +
+                "if(window.__idcfBusy){return;}" +
+                "window.__idcfBusy=true;" +
+                "setTimeout(function(){window.__idcfBusy=false;},1600);" +
                 "var href=location.href;" +
                 "function visible(el){return !!(el&&el.offsetWidth>0&&el.offsetHeight>0);}" +
+                "function hasTurnstile(){" +
                 "var nodes=document.querySelectorAll('.cf-turnstile,#cf-turnstile,iframe[src*=\"challenges.cloudflare.com\"]');" +
-                "var turnstile=false;" +
-                "for(var i=0;i<nodes.length;i++){if(visible(nodes[i])){turnstile=true;break;}}" +
-                "var chrome=!!document.querySelector('#site-logo,.d-header,#main-outlet,#site-text-logo,.d-header-wrap,.topic-list,table.topic-list,.login-button,button.login-button,.list-controls,.alert-info');" +
-                "var text=(document.body&&document.body.innerText)?document.body.innerText.slice(0,400):'';" +
-                "var flag=chrome?'ready':(turnstile?'turnstile':'wait');" +
-                "var payload=flag+'::'+href+'::'+text;" +
+                "for(var i=0;i<nodes.length;i++){if(visible(nodes[i])){return true;}}" +
+                "return false;" +
+                "}" +
+                "function send(flag,extra){" +
+                "window.__idcfBusy=false;" +
+                "var payload=flag+'::'+href+'::'+String(extra||'');" +
                 "CALLBACK" +
+                "}" +
+                "var ac=new AbortController();" +
+                "setTimeout(function(){try{ac.abort();}catch(e){}},1500);" +
+                "fetch('/session/csrf',{credentials:'include',headers:{" +
+                "'Accept':'application/json, text/plain, */*'," +
+                "'X-Requested-With':'XMLHttpRequest'" +
+                "},signal:ac.signal})" +
+                ".then(function(r){" +
+                "var mitigated=String(r.headers.get('cf-mitigated')||'').toLowerCase();" +
+                "var ok=r.status>=200&&r.status<300;" +
+                "return r.text().then(function(t){return {ok:ok,mitigated:mitigated,t:String(t||'')};});" +
+                "})" +
+                ".then(function(x){" +
+                "if(hasTurnstile()){send('turnstile',x.t.slice(0,80));return;}" +
+                "if(x.mitigated.indexOf('challenge')>=0){send('wait',x.t.slice(0,80));return;}" +
+                "var body=x.t.replace(/^\\s+/,'');" +
+                "if(x.ok&&body.charAt(0)==='{'&&body.indexOf('\"csrf\"')>=0){send('passed',body.slice(0,80));return;}" +
+                "send('wait',x.t.slice(0,80));" +
+                "})" +
+                ".catch(function(){send(hasTurnstile()?'turnstile':'wait','');});" +
                 "})();"
     }
 }

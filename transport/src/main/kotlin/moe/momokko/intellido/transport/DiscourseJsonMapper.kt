@@ -5,6 +5,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import moe.momokko.intellido.domain.catalog.CommunityAbout
+import moe.momokko.intellido.domain.catalog.CommunityCategories
 import moe.momokko.intellido.domain.catalog.CommunityBadge
 import moe.momokko.intellido.domain.catalog.CommunityCategory
 import moe.momokko.intellido.domain.catalog.CommunityGroup
@@ -19,6 +20,7 @@ import moe.momokko.intellido.domain.catalog.PublicMember
 import moe.momokko.intellido.domain.catalog.PublicProfile
 import moe.momokko.intellido.domain.catalog.PublicProfileSummary
 import moe.momokko.intellido.domain.search.SearchHit
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.domain.site.SiteSettings
 import moe.momokko.intellido.domain.topic.HomeTopic
 import moe.momokko.intellido.domain.topic.PostBoost
@@ -35,21 +37,47 @@ class DiscourseJsonMapper {
         val list = root.obj("category_list")?.arr("categories")
             ?: root.arr("categories")
             ?: return emptyList()
-        return list.objects().mapNotNull { item ->
-            val id = item.long("id") ?: return@mapNotNull null
-            val name = item.str("name") ?: return@mapNotNull null
-            CommunityCategory(
-                id = id,
-                name = name,
-                slug = item.str("slug") ?: id.toString(),
-                description = item.str("description_text") ?: item.str("description"),
-                topicCount = item.int("topic_count") ?: 0,
-                readRestricted = item.bool("read_restricted") ?: false,
-                color = item.str("color"),
-                icon = item.str("icon"),
-                parentId = item.long("parent_category_id"),
-            )
+        val byId = linkedMapOf<Long, CommunityCategory>()
+        fun add(item: JsonObject) {
+            val parsed = parseCategory(item) ?: return
+            byId[parsed.id] = parsed
+            item.arr("subcategory_list")?.objects()?.forEach { child -> add(child) }
+            item.arr("subcategories")?.objects()?.forEach { child -> add(child) }
         }
+        list.objects().forEach { item -> add(item) }
+        return CommunityCategories.inheritParents(byId.values.toList())
+    }
+
+    private fun parseCategory(item: JsonObject): CommunityCategory? {
+        val id = item.long("id") ?: return null
+        val name = item.str("name") ?: return null
+        return CommunityCategory(
+            id = id,
+            name = name,
+            slug = item.str("slug") ?: id.toString(),
+            description = item.str("description_text") ?: item.str("description"),
+            topicCount = item.int("topic_count") ?: 0,
+            readRestricted = item.bool("read_restricted") ?: false,
+            color = item.str("color"),
+            icon = item.str("icon"),
+            parentId = item.long("parent_category_id"),
+            minTrustLevel = minTrustLevel(item),
+        )
+    }
+
+    private fun minTrustLevel(item: JsonObject): Int? {
+        val direct = item.intish("min_trust_level")
+            ?: item.intish("minimum_trust_level")
+            ?: item.intish("required_minimum_trust_level")
+            ?: item.intish("required_trust_level")
+        if (direct != null) {
+            return direct.takeIf { it in 1..4 }
+        }
+        val fields = item.obj("custom_fields") ?: return null
+        val nested = fields.intish("min_trust_level")
+            ?: fields.intish("minimum_trust_level")
+            ?: fields.intish("required_trust_level")
+        return nested?.takeIf { it in 1..4 }
     }
 
     fun homeTopics(json: String, categories: List<CommunityCategory>): List<HomeTopic> {
@@ -66,14 +94,17 @@ class DiscourseJsonMapper {
         val title = root.str("title") ?: error("LINUX DO topic JSON missing title")
         val posts = root.obj("post_stream")?.arr("posts")?.objects().orEmpty()
         val firstUser = posts.firstOrNull()?.str("username") ?: "unknown"
-        val category = root.long("category_id")?.let { categoryId -> categories.firstOrNull { it.id == categoryId } }
+        val categoryById = categories.associateBy { it.id }
+        val category = root.long("category_id")?.let { categoryId -> categoryById[categoryId] }
+        val parent = category?.parentId?.let { categoryById[it] }
         val topic = HomeTopic(
             id = id,
             title = title,
             slug = root.str("slug") ?: id.toString(),
             postsCount = root.int("posts_count") ?: posts.size,
             replyCount = root.int("reply_count") ?: (posts.size - 1).coerceAtLeast(0),
-            categoryName = category?.name,
+            categoryName = category?.listLabel(parent),
+            categoryRestricted = category?.readRestricted == true,
             authorUsername = firstUser,
             lastPostedAt = root.instant("last_posted_at")
                 ?: posts.mapNotNull { it.instant("created_at") }.maxOrNull()
@@ -121,6 +152,26 @@ class DiscourseJsonMapper {
         }
         return posts.mapNotNull { item -> toPost(item, fallbackTitle) }
     }
+
+    fun currentSession(json: String): MemberSession {
+        val trimmed = json.trim()
+        if (!trimmed.startsWith("{")) {
+            return MemberSession.Anonymous
+        }
+        val root = runCatching { jsonObject(trimmed) }.getOrNull() ?: return MemberSession.Anonymous
+        val user = root.obj("current_user") ?: return MemberSession.Anonymous
+        val username = user.str("username")?.takeIf { it.isNotBlank() } ?: return MemberSession.Anonymous
+        return MemberSession.SignedIn(
+            username = username,
+            trustLevel = (user.int("trust_level") ?: 0).coerceIn(0, 4),
+            id = user.long("id")?.takeIf { it > 0 },
+            name = user.str("name")?.takeIf { it.isNotBlank() },
+            avatarTemplate = user.str("avatar_template")?.takeIf { it.isNotBlank() },
+        )
+    }
+
+    fun csrfToken(json: String): String? =
+        runCatching { jsonObject(json).str("csrf")?.takeIf { it.isNotBlank() } }.getOrNull()
 
     fun publicProfile(json: String, fieldNames: Map<Int, String> = emptyMap()): PublicProfile {
         val root = jsonObject(json)
@@ -548,6 +599,16 @@ class DiscourseJsonMapper {
             ?: 0
     }
 
+    private fun categoryLabel(item: JsonObject, categoryById: Map<Long, CommunityCategory>): String? {
+        val category = item.long("category_id")?.let { categoryById[it] }
+        val fromCatalog = category?.listLabel(category.parentId?.let { categoryById[it] })
+        if (!fromCatalog.isNullOrBlank()) {
+            return fromCatalog
+        }
+        return item.obj("category")?.str("name")?.takeIf { it.isNotBlank() }
+            ?: item.str("category_name")?.takeIf { it.isNotBlank() }
+    }
+
     private fun toHomeTopic(
         item: JsonObject,
         users: Map<Long, TopicPoster>,
@@ -565,11 +626,15 @@ class DiscourseJsonMapper {
             slug = item.str("slug") ?: id.toString(),
             postsCount = item.int("posts_count") ?: 1,
             replyCount = item.int("reply_count") ?: 0,
-            categoryName = item.long("category_id")?.let { categoryById[it]?.name },
+            categoryName = categoryLabel(item, categoryById),
             authorUsername = posters.firstOrNull()?.username ?: item.str("last_poster_username") ?: "unknown",
             lastPostedAt = item.instant("last_posted_at") ?: Instant.EPOCH,
-            categoryColor = item.long("category_id")?.let { categoryById[it]?.color },
-            categoryIcon = item.long("category_id")?.let { categoryById[it]?.icon },
+            categoryColor = item.long("category_id")?.let { categoryById[it]?.color }
+                ?: item.obj("category")?.str("color"),
+            categoryIcon = item.long("category_id")?.let { categoryById[it]?.icon }
+                ?: item.obj("category")?.str("icon"),
+            categoryRestricted = item.long("category_id")?.let { categoryById[it]?.readRestricted } == true ||
+                item.obj("category")?.bool("read_restricted") == true,
             tags = item.stringList("tags"),
             views = item.int("views") ?: 0,
             pinned = item.bool("pinned") ?: false,
@@ -615,6 +680,19 @@ private fun JsonObject.long(name: String): Long? =
 
 private fun JsonObject.int(name: String): Int? =
     get(name)?.takeUnless { it.isJsonNull }?.let { if (it.isJsonPrimitive) it.asInt else null }
+
+private fun JsonObject.intish(name: String): Int? {
+    val value = get(name)?.takeUnless { it.isJsonNull } ?: return null
+    if (!value.isJsonPrimitive) {
+        return null
+    }
+    val primitive = value.asJsonPrimitive
+    return when {
+        primitive.isNumber -> primitive.asInt
+        primitive.isString -> primitive.asString.trim().toIntOrNull()
+        else -> null
+    }
+}
 
 private fun JsonObject.bool(name: String): Boolean? =
     get(name)?.takeUnless { it.isJsonNull }?.let { if (it.isJsonPrimitive) it.asBoolean else null }

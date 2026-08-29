@@ -15,6 +15,8 @@ import moe.momokko.intellido.platform.catalog.DirectoryKind
 import moe.momokko.intellido.platform.i18n.IntelliDoStrings
 import moe.momokko.intellido.platform.reset.LocalDataReset
 import moe.momokko.intellido.ui.settings.ReadingConfigurable
+import moe.momokko.intellido.domain.session.MemberSession
+import moe.momokko.intellido.ui.session.SignInCoordinator
 import moe.momokko.intellido.ui.startup.IntelliDoRuntime
 import moe.momokko.intellido.ui.startup.IntelliDoStartup
 import moe.momokko.intellido.ui.topic.TopicFileEditor
@@ -55,12 +57,47 @@ class AboutAction : AnAction() {
 
 class SignInAction : AnAction() {
     override fun actionPerformed(event: AnActionEvent) {
-        val locale = currentLocale()
-        Messages.showInfoMessage(
-            IntelliDoStrings.message("signIn.notWired", locale),
-            IntelliDoStrings.message("action.signIn", locale),
-        )
+        SignInCoordinator.requestSignIn(event.project)
     }
+
+    override fun update(event: AnActionEvent) {
+        event.presentation.isEnabledAndVisible =
+            runCatching { service<IntelliDoRuntime>().session }.getOrDefault(MemberSession.Anonymous) is MemberSession.Anonymous
+        event.presentation.text = IntelliDoStrings.message("action.signIn", currentLocale())
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+}
+
+class SignOutAction : AnAction() {
+    override fun actionPerformed(event: AnActionEvent) {
+        SignInCoordinator.signOut(event.project)
+    }
+
+    override fun update(event: AnActionEvent) {
+        event.presentation.isEnabledAndVisible =
+            runCatching { service<IntelliDoRuntime>().session }.getOrDefault(MemberSession.Anonymous) is MemberSession.SignedIn
+        event.presentation.text = IntelliDoStrings.message("action.signOut", currentLocale())
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+}
+
+class OpenOwnProfileAction : AnAction() {
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = event.project ?: return
+        val session = runCatching { service<IntelliDoRuntime>().session }.getOrNull() as? MemberSession.SignedIn
+            ?: return
+        IntelliDoWorkspace.openUser(project, session.username)
+    }
+
+    override fun update(event: AnActionEvent) {
+        event.presentation.isEnabledAndVisible =
+            runCatching { service<IntelliDoRuntime>().session }.getOrDefault(MemberSession.Anonymous) is MemberSession.SignedIn
+        event.presentation.text = IntelliDoStrings.message("action.openOwnProfile", currentLocale())
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 }
 
 abstract class OpenDirectoryAction(private val kind: DirectoryKind) : AnAction() {

@@ -67,4 +67,19 @@ class JcefNavigationTest {
             JcefNavigation.decide("https://linux.do/t/welcome/101", mainFrame = true, nativeStaysInCef = true),
         )
     }
+
+    @Test
+    fun `auth flow keeps https oauth origins in the modal`() {
+        assertEquals(
+            JcefNav.Allow,
+            JcefNavigation.decide("https://linux.do/login", mainFrame = true, authFlow = true),
+        )
+        assertEquals(
+            JcefNav.Allow,
+            JcefNavigation.decide("https://github.com/login/oauth/authorize", mainFrame = true, authFlow = true),
+        )
+        assertTrue(
+            JcefNavigation.decide("http://example.com", mainFrame = true, authFlow = true) is JcefNav.Confirm,
+        )
+    }
 }

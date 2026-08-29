@@ -1,14 +1,15 @@
 package moe.momokko.intellido.transport
 
 import moe.momokko.intellido.domain.catalog.CommunityAbout
-import moe.momokko.intellido.domain.catalog.CommunityCategories
 import moe.momokko.intellido.domain.catalog.CommunityBadge
+import moe.momokko.intellido.domain.catalog.CommunityCategories
 import moe.momokko.intellido.domain.catalog.CommunityCategory
 import moe.momokko.intellido.domain.catalog.CommunityGroup
 import moe.momokko.intellido.domain.catalog.CommunityTag
 import moe.momokko.intellido.domain.catalog.PublicMember
 import moe.momokko.intellido.domain.catalog.PublicProfile
 import moe.momokko.intellido.domain.search.SearchHit
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.domain.site.SiteSettings
 import moe.momokko.intellido.domain.topic.HomeTopic
 import moe.momokko.intellido.domain.topic.TopicPost
@@ -27,6 +28,8 @@ class BridgedLinuxDoCommunityClient(
     @Volatile
     private var categoryCache: List<CommunityCategory>? = null
     private val categoryLock = Any()
+    @Volatile
+    private var cachedSiteJson: String? = null
     @Volatile
     private var userFieldNames: Map<Int, String>? = null
     private val userFieldLock = Any()
@@ -99,18 +102,13 @@ class BridgedLinuxDoCommunityClient(
         categoryCache?.let { return it }
         synchronized(categoryLock) {
             categoryCache?.let { return it }
-            val top = runCatching {
-                mapper.categories(fetch.get(LinuxDoUrls.categories())).filterNot { it.readRestricted }
+            // Fluxdo: /site.json is the full catalog, including trust-gated
+            // subcategories that /categories.json omits from subcategory_list.
+            val fromSite = runCatching { mapper.categories(siteDocument()) }.getOrDefault(emptyList())
+            val fromList = runCatching {
+                mapper.categories(fetch.get(LinuxDoUrls.categories()))
             }.getOrDefault(emptyList())
-            if (top.isNotEmpty()) {
-                val merged = CommunityCategories.sidebarOrder(top, top)
-                categoryCache = merged
-                return merged
-            }
-            val all = runCatching {
-                mapper.categories(fetch.get(LinuxDoUrls.site())).filterNot { it.readRestricted }
-            }.getOrDefault(emptyList())
-            val merged = CommunityCategories.sidebarOrder(all, all)
+            val merged = CommunityCategories.merge(fromSite, fromList)
             if (merged.isNotEmpty()) {
                 categoryCache = merged
             }
@@ -164,7 +162,14 @@ class BridgedLinuxDoCommunityClient(
     }
 
     override fun loadSiteSettings(): SiteSettings =
-        runCatching { mapper.siteSettings(fetch.get(LinuxDoUrls.site())) }.getOrDefault(SiteSettings())
+        runCatching { mapper.siteSettings(siteDocument()) }.getOrDefault(SiteSettings())
+
+    private fun siteDocument(): String {
+        cachedSiteJson?.let { return it }
+        val json = fetch.get(LinuxDoUrls.site())
+        cachedSiteJson = json
+        return json
+    }
 
     override fun loadPublicProfile(username: String): PublicProfile {
         val profile = mapper.publicProfile(fetch.get(LinuxDoUrls.user(username)), loadUserFieldNames())
@@ -172,11 +177,44 @@ class BridgedLinuxDoCommunityClient(
         return if (summary == null) profile else profile.copy(summary = summary)
     }
 
+    override fun loadCurrentSession(): MemberSession =
+        runCatching { mapper.currentSession(fetch.get(LinuxDoUrls.sessionCurrent())) }
+            .getOrDefault(MemberSession.Anonymous)
+
+    override fun invalidateCatalog() {
+        synchronized(categoryLock) {
+            categoryCache = null
+            cachedSiteJson = null
+        }
+    }
+
+    override fun loadCreatedTopics(username: String, page: Int): List<HomeTopic> {
+        val name = username.trim()
+        if (name.isEmpty()) {
+            return emptyList()
+        }
+        return mapper.homeTopics(fetch.get(LinuxDoUrls.createdBy(name, page)), loadCategories())
+    }
+
+    override fun signOutRemote() {
+        val csrf = runCatching { mapper.csrfToken(fetch.get(LinuxDoUrls.sessionCsrf())) }.getOrNull() ?: return
+        runCatching {
+            fetch.delete(
+                LinuxDoUrls.session(),
+                mapOf(
+                    "X-CSRF-Token" to csrf,
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Accept" to "application/json",
+                ),
+            )
+        }
+    }
+
     private fun loadUserFieldNames(): Map<Int, String> {
         userFieldNames?.let { return it }
         synchronized(userFieldLock) {
             userFieldNames?.let { return it }
-            val names = runCatching { mapper.userFieldNames(fetch.get(LinuxDoUrls.site())) }.getOrDefault(emptyMap())
+            val names = runCatching { mapper.userFieldNames(siteDocument()) }.getOrDefault(emptyMap())
             userFieldNames = names
             return names
         }

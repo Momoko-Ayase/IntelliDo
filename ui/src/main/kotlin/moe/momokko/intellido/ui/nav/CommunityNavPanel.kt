@@ -19,8 +19,11 @@ import moe.momokko.intellido.platform.catalog.DirectoryKind
 import moe.momokko.intellido.platform.i18n.IntelliDoStrings
 import moe.momokko.intellido.platform.nav.CommunityNavAction
 import moe.momokko.intellido.platform.nav.CommunityNavEntry
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.platform.nav.CommunityNavModel
 import moe.momokko.intellido.ui.guest.GuestUi
+import moe.momokko.intellido.ui.session.MemberSessionListener
+import moe.momokko.intellido.ui.session.SignInCoordinator
 import moe.momokko.intellido.ui.startup.IntelliDoRuntime
 import moe.momokko.intellido.ui.workspace.IntelliDoWorkspace
 import java.awt.BorderLayout
@@ -68,10 +71,23 @@ class CommunityNavPanel(
         scroll.border = JBUI.Borders.empty()
         scroll.viewportBorder = JBUI.Borders.empty()
         add(scroll, BorderLayout.CENTER)
-        seedExpanded(CommunityNavModel.guest(categories, tags))
+        seedExpanded(navEntries())
         paintEntries()
         loadLiveCatalog()
+        ApplicationManager.getApplication().messageBus.connect(project).subscribe(
+            MemberSessionListener.TOPIC,
+            MemberSessionListener { _, _ ->
+                ApplicationManager.getApplication().invokeLater {
+                    if (!project.isDisposed) {
+                        paintEntries()
+                    }
+                }
+            },
+        )
     }
+
+    private fun navEntries() =
+        CommunityNavModel.forSession(runtime.session is MemberSession.SignedIn, categories, tags)
 
     /**
      * The seed list fixes which categories appear and in what order. The live
@@ -110,7 +126,7 @@ class CommunityNavPanel(
 
     private fun paintEntries() {
         body.removeAll()
-        CommunityNavModel.guest(categories, tags).forEach { entry ->
+        navEntries().forEach { entry ->
             paintEntry(entry, indent = 0)
         }
         body.add(Box.createVerticalGlue())
@@ -174,10 +190,7 @@ class CommunityNavPanel(
             indent = indent,
         ) {
             if (entry.needsSignIn) {
-                Messages.showInfoMessage(
-                    IntelliDoStrings.message("signIn.notWired", locale),
-                    IntelliDoStrings.message("action.signIn", locale),
-                )
+                SignInCoordinator.confirmThenSignIn(project)
                 return@navRow
             }
             selectedAction = entry.action
@@ -193,7 +206,16 @@ class CommunityNavPanel(
                 CommunityNavAction.BADGES -> IntelliDoWorkspace.openDirectory(project, DirectoryKind.BADGES)
                 CommunityNavAction.MEMBERS -> IntelliDoWorkspace.openDirectory(project, DirectoryKind.MEMBERS)
                 CommunityNavAction.ABOUT -> IntelliDoWorkspace.openDirectory(project, DirectoryKind.ABOUT)
-                CommunityNavAction.MY_POSTS, CommunityNavAction.MY_MESSAGES -> Unit
+                CommunityNavAction.MY_POSTS -> {
+                    val session = runtime.session as? MemberSession.SignedIn
+                    if (session != null) {
+                        IntelliDoWorkspace.openCreatedTopics(project, session.username)
+                    }
+                }
+                CommunityNavAction.MY_MESSAGES -> Messages.showInfoMessage(
+                    IntelliDoStrings.message("nav.notInSlice", locale),
+                    IntelliDoStrings.message("nav.myMessages", locale),
+                )
             }
             paintEntries()
         }

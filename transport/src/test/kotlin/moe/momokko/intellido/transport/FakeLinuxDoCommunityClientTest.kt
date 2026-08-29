@@ -26,4 +26,16 @@ class FakeLinuxDoCommunityClientTest {
             assertTrue(topic.title.isNotBlank())
         }
     }
+
+    @Test
+    fun `fake client can adopt a signed-in helper session`() {
+        val client = FakeLinuxDoCommunityClient()
+        assertTrue(client.loadCurrentSession() is moe.momokko.intellido.domain.session.MemberSession.Anonymous)
+        client.adoptSession(FakeLinuxDoCommunityClient.HELPER_SESSION)
+        val signed = client.loadCurrentSession() as moe.momokko.intellido.domain.session.MemberSession.SignedIn
+        assertEquals("helper", signed.username)
+        assertEquals(listOf(102L, 104L, 106L), client.loadCreatedTopics("helper").map { it.id })
+        client.signOutRemote()
+        assertTrue(client.loadCurrentSession() is moe.momokko.intellido.domain.session.MemberSession.Anonymous)
+    }
 }

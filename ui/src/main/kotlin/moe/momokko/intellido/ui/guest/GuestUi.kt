@@ -49,7 +49,12 @@ object GuestUi {
         return row
     }
 
-    fun categoryBadge(name: String, hex: String?, icon: String? = null): JComponent {
+    fun categoryBadge(
+        name: String,
+        hex: String?,
+        icon: String? = null,
+        restricted: Boolean = false,
+    ): JComponent {
         val color = parseHex(hex) ?: Color(0x88, 0x88, 0x88)
         val row = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 4, 0))
         row.isOpaque = false
@@ -61,6 +66,9 @@ object GuestUi {
                 JBUI.Borders.customLine(JBColor(color, color), 0, 3, 0, 0),
                 JBUI.Borders.empty(0, 6, 0, 0),
             )
+        }
+        if (restricted) {
+            row.add(FaMark("lock", muted, 11))
         }
         val label = JBLabel(name)
         label.foreground = muted

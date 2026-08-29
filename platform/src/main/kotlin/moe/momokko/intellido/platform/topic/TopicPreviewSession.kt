@@ -47,6 +47,10 @@ class TopicPreviewSession {
         return snapshot(tabs.keys.lastOrNull())
     }
 
+    fun clear() {
+        tabs.clear()
+    }
+
     fun snapshot(focusedTopicId: Long? = tabs.keys.lastOrNull()): TopicPreviewSnapshot =
         TopicPreviewSnapshot(
             tabs = tabs.values.toList(),

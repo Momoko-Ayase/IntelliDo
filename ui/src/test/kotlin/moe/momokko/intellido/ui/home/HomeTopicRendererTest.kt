@@ -29,6 +29,21 @@ class HomeTopicRendererTest {
     }
 
     @Test
+    fun `restricted subcategory chip keeps the lock and LINUX DO name`() {
+        val topic = FakeLinuxDoCommunityClient.defaultTopics.first().copy(
+            categoryName = "搞七捻三, Lv1",
+            categoryIcon = "droplet",
+            categoryRestricted = true,
+            tags = listOf("人工智能"),
+        )
+        val texts = render(topic)
+        assertTrue(texts.any { it.contains("搞七捻三, Lv1") }, texts.toString())
+        assertTrue(texts.contains("droplet"), texts.toString())
+        assertTrue(texts.contains("lock"), texts.toString())
+        assertTrue(texts.any { it.contains("人工智能") }, texts.toString())
+    }
+
+    @Test
     fun `closed and accepted topics show Discourse status marks`() {
         val topic = FakeLinuxDoCommunityClient.defaultTopics.first().copy(closed = true, acceptedAnswer = true)
         val texts = render(topic)

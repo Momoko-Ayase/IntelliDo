@@ -3,6 +3,7 @@ package moe.momokko.intellido.ui.jcef
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class JcefLinuxDoJsonFetcherTest {
@@ -62,5 +63,7 @@ class JcefLinuxDoJsonFetcherTest {
     fun `in-page fetch asks Discourse for chinese`() {
         assertEquals("zh-CN,zh;q=0.9", JcefFetchPolicy.ACCEPT_LANGUAGE)
         assertEquals("zh_CN", JcefFetchPolicy.DISCOURSE_LOCALE)
+        assertTrue(JcefFetchPolicy.JSON_FETCH_HEADERS_JS.contains("Accept-Language"))
+        assertTrue(JcefFetchPolicy.JSON_FETCH_HEADERS_JS.contains("application/json"))
     }
 }

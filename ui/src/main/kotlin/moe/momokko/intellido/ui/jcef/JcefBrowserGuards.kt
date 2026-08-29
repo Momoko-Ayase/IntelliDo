@@ -25,10 +25,11 @@ object JcefBrowserGuards {
         onCopy: (String) -> Unit = {},
         pinLinuxDo: Boolean = false,
         nativeStaysInCef: Boolean = false,
+        authFlow: Boolean = false,
     ) {
         browser.setOpenLinksInExternalBrowser(false)
         fun dispatch(url: String, mainFrame: Boolean, fromPopup: Boolean): Boolean {
-            val action = JcefNavigation.decide(url, mainFrame, pinLinuxDo, nativeStaysInCef)
+            val action = JcefNavigation.decide(url, mainFrame, pinLinuxDo, nativeStaysInCef, authFlow)
             return when (action) {
                 JcefNav.Allow -> {
                     if (fromPopup) {

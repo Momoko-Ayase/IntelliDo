@@ -13,8 +13,9 @@ enum class BrowserPersistence {
 /**
  * Dedicated JCEF profile for the single LINUX DO account.
  *
- * Anonymous sessions stay process-only: leftover cookies are wiped on prepare
- * and CEF must not persist session cookies to disk.
+ * Cloudflare `cf_clearance` is kept on disk across anonymous launches (Fluxdo
+ * does the same). Discourse `_t` / `_forum_session` are stripped after CEF
+ * starts when the member is not remembered. Sign-out still wipes the directory.
  */
 data class IsolatedBrowserProfile(
     val channel: ReleaseChannel,
@@ -22,7 +23,7 @@ data class IsolatedBrowserProfile(
     val userDataDirectory: Path,
 ) {
     val persistCookiesToDisk: Boolean
-        get() = persistence == BrowserPersistence.OsProtected
+        get() = true
 }
 
 data class IsolatedJcefSettings(
@@ -47,20 +48,28 @@ object IsolatedBrowserProfiles {
         "--disable-default-apps",
     )
 
-    fun prepareAnonymous(root: Path, channel: ReleaseChannel): IsolatedBrowserProfile {
+    fun prepareAnonymous(root: Path, channel: ReleaseChannel): IsolatedBrowserProfile =
+        prepare(root, channel, remembered = false)
+
+    /**
+     * Reuse the dedicated profile without wiping leftover cookies. Callers must
+     * only do this when an OS-protected store remembered a trusted session.
+     */
+    fun prepareRemembered(root: Path, channel: ReleaseChannel): IsolatedBrowserProfile =
+        prepare(root, channel, remembered = true)
+
+    fun prepare(root: Path, channel: ReleaseChannel, remembered: Boolean): IsolatedBrowserProfile {
         val directory = root
             .resolve("jcef")
             .resolve(channel.name.lowercase())
-            .resolve("anonymous")
+            .resolve("profile")
         require(!isForbiddenSystemBrowserPath(root) && !isForbiddenSystemBrowserPath(directory)) {
             "IntelliDo must not use a system browser profile path: $directory"
         }
-        wipe(directory)
-        wipe(root.resolve(DEFAULT_CACHE_DIR))
         Files.createDirectories(directory)
         return IsolatedBrowserProfile(
             channel = channel,
-            persistence = BrowserPersistence.ProcessOnly,
+            persistence = if (remembered) BrowserPersistence.OsProtected else BrowserPersistence.ProcessOnly,
             userDataDirectory = directory,
         )
     }

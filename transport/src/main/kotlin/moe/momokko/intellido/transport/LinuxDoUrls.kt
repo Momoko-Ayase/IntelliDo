@@ -1,5 +1,6 @@
 package moe.momokko.intellido.transport
 
+import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -24,7 +25,7 @@ object LinuxDoUrls {
     fun topicPosts(id: Long, postIds: List<Long>): String =
         "/t/$id/posts.json?" + postIds.joinToString("&") { "post_ids[]=$it" }
 
-    fun categories(): String = "/categories.json"
+    fun categories(): String = "/categories.json?include_subcategories=true"
 
     fun site(): String = "/site.json"
 
@@ -61,6 +62,45 @@ object LinuxDoUrls {
 
     fun userSummary(username: String): String = "/u/${encode(username)}/summary.json"
 
+    fun login(): String = "/login"
+
+    /**
+     * HTML identity pages where a current_user cookie is not yet a finished
+     * IntelliDo sign-in. API paths such as /session/current.json are excluded.
+     */
+    fun isAuthLocation(url: String): Boolean {
+        val path = pathOf(url)?.lowercase() ?: return false
+        return path == "/login" || path.startsWith("/login/") ||
+            path == "/signup" || path.startsWith("/signup/") ||
+            path == "/u/login" ||
+            path.startsWith("/session/email-login") ||
+            path.startsWith("/session/passkey") ||
+            path.startsWith("/auth/")
+    }
+
+    private fun pathOf(url: String): String? {
+        val raw = url.trim()
+        if (raw.isEmpty()) {
+            return null
+        }
+        val absolute = if (raw.startsWith("/")) ORIGIN + raw else raw
+        val uri = runCatching { URI(absolute) }.getOrNull() ?: return null
+        val host = uri.host?.lowercase()
+        if (host != null && host != "linux.do" && host != "www.linux.do") {
+            return null
+        }
+        return uri.path.orEmpty().trimEnd('/').ifEmpty { "/" }
+    }
+
+    fun sessionCurrent(): String = "/session/current.json"
+
+    fun sessionCsrf(): String = "/session/csrf"
+
+    fun session(): String = "/session"
+
+    fun createdBy(username: String, page: Int = 0): String =
+        paged("/topics/created-by/${encode(username)}.json", page)
+
     fun postReplies(postId: Long): String = "/posts/$postId/replies.json"
 
     const val MESSAGE_BUS_ORIGIN: String = "https://ping.ldstatic.com"
@@ -81,6 +121,12 @@ fun interface LinuxDoJsonFetcher {
     fun post(path: String, form: Map<String, String>, timeoutSec: Long = 40L): String {
         throw UnsupportedOperationException("LINUX DO JSON fetcher does not support POST")
     }
+
+    fun delete(path: String, headers: Map<String, String> = emptyMap()): String {
+        throw UnsupportedOperationException("LINUX DO JSON fetcher does not support DELETE")
+    }
+
+    fun clearCookies() = Unit
 
     fun postStream(
         path: String,

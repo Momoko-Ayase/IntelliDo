@@ -14,6 +14,7 @@ import moe.momokko.intellido.domain.content.LinuxDoMediaHosts
 import moe.momokko.intellido.transport.LinuxDoJsonFetcher
 import moe.momokko.intellido.transport.LinuxDoMediaLoader
 import moe.momokko.intellido.transport.LinuxDoUrls
+import moe.momokko.intellido.ui.session.SignInCoordinator
 import moe.momokko.intellido.ui.startup.IntelliDoRuntime
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
@@ -51,10 +52,19 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
     private val browser: JBCefBrowser
     private val query: JBCefJSQuery
     private val loadHandler: CefLoadHandlerAdapter
+    @Volatile
+    private var lastChallengeOkAt: Long = 0
+
+    val cefClient: JBCefClient
+        get() = browser.jbCefClient
+
+    fun invalidateOrigin() {
+        originReady = false
+    }
 
     init {
         val client = JBCefApp.getInstance().createClient()
-        client.setProperty(JBCefClient.Properties.JS_QUERY_POOL_SIZE, 8)
+        client.setProperty(JBCefClient.Properties.JS_QUERY_POOL_SIZE, 16)
         browser = JBCefBrowser.createBuilder()
             .setClient(client)
             .setOffScreenRendering(true)
@@ -77,6 +87,12 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             JBCefJSQuery.Response("")
         }
         loadHandler = object : CefLoadHandlerAdapter() {
+            override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
+                if (frame.isMain) {
+                    settleOrigin(originGen.get())
+                }
+            }
+
             override fun onLoadingStateChange(
                 cefBrowser: CefBrowser,
                 isLoading: Boolean,
@@ -86,16 +102,7 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
                 if (isLoading) {
                     return
                 }
-                val gen = originGen.get()
-                ApplicationManager.getApplication().invokeLater {
-                    val timer = Timer(JcefFetchPolicy.ORIGIN_SETTLE_MS) {
-                        if (originGen.get() == gen) {
-                            originPending.get()?.complete("loaded")
-                        }
-                    }
-                    timer.isRepeats = false
-                    timer.start()
-                }
+                settleOrigin(originGen.get())
             }
 
             override fun onLoadError(
@@ -111,6 +118,18 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             }
         }
         browser.jbCefClient.addLoadHandler(loadHandler, browser.cefBrowser)
+    }
+
+    private fun settleOrigin(gen: Int) {
+        ApplicationManager.getApplication().invokeLater {
+            val timer = Timer(JcefFetchPolicy.ORIGIN_SETTLE_MS) {
+                if (originGen.get() == gen) {
+                    originPending.get()?.complete("loaded")
+                }
+            }
+            timer.isRepeats = false
+            timer.start()
+        }
     }
 
     override fun post(path: String, form: Map<String, String>, timeoutSec: Long): String {
@@ -144,10 +163,39 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         return "[]"
     }
 
+    override fun delete(path: String, headers: Map<String, String>): String {
+        check(!ApplicationManager.getApplication().isDispatchThread) {
+            "LINUX DO JCEF fetches must not run on the EDT"
+        }
+        gate.beginJson()
+        try {
+            prepareOrigin()
+            val target = LinuxDoUrls.absolute(path)
+            synchronized(lock) {
+                throttle(JcefFetchPolicy.JSON_GAP_MS)
+                return try {
+                    runInPageDelete(target, headers)
+                } finally {
+                    lastFinishedAt = System.currentTimeMillis()
+                }
+            }
+        } finally {
+            gate.endJson()
+        }
+    }
+
+    override fun clearCookies() {
+        runCatching {
+            org.cef.network.CefCookieManager.getGlobalManager()?.deleteCookies("", "")
+        }
+        originReady = false
+    }
+
     override fun get(path: String): String {
         check(!ApplicationManager.getApplication().isDispatchThread) {
             "LINUX DO JCEF fetches must not run on the EDT"
         }
+        abortMessageBusPoll()
         gate.beginJson()
         try {
             prepareOrigin()
@@ -248,16 +296,18 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
                 return
             }
             loadOrigin()
-        }
-        if (originReady) {
-            return
+            if (originReady) {
+                return
+            }
         }
         completeViaChallenge()
         synchronized(lock) {
             loadOrigin()
-            if (!originReady) {
-                throw IllegalStateException("无法加载")
+            if (originReady) {
+                lastChallengeOkAt = System.currentTimeMillis()
+                return
             }
+            throw IllegalStateException("无法加载")
         }
     }
 
@@ -266,33 +316,50 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         originGen.incrementAndGet()
         val future = CompletableFuture<String>()
         originPending.set(future)
-        logger.info("Opening LINUX DO origin in JCEF")
+        val probeUrl = LinuxDoUrls.absolute(LinuxDoUrls.sessionCsrf())
+        logger.info("Opening LINUX DO origin in JCEF at $probeUrl")
         ApplicationManager.getApplication().invokeLater {
-            browser.loadURL(LinuxDoUrls.ORIGIN + "/")
+            browser.loadURL(probeUrl)
         }
         try {
-            future.get(25, TimeUnit.SECONDS)
+            future.get(JcefFetchPolicy.ORIGIN_LOAD_TIMEOUT_SEC, TimeUnit.SECONDS)
         } catch (error: Exception) {
             logger.warn("LINUX DO origin load did not finish: ${error.message}")
-            return
         } finally {
             originPending.set(null)
             originGen.incrementAndGet()
         }
-        if (originIsCommunity()) {
+        repeat(JcefFetchPolicy.ORIGIN_PROBES) { attempt ->
+            if (markOriginReadyIfPossible()) {
+                logger.info("LINUX DO origin ready after ${attempt + 1} JSON probe(s)")
+                return
+            }
+            Thread.sleep(JcefFetchPolicy.EMPTY_RETRY_MS)
+        }
+        logger.info("LINUX DO origin is not answering JSON yet")
+    }
+
+    /**
+     * Ready means the hidden page can fetch structured LINUX DO JSON, not that
+     * the Ember chrome has painted. Fluxdo uses the same bar: API success.
+     */
+    private fun markOriginReadyIfPossible(): Boolean {
+        if (originCanFetch()) {
             originReady = true
             applyDiscourseLocale()
-            logger.info("LINUX DO origin ready")
-            return
+            return true
         }
-        Thread.sleep(JcefFetchPolicy.EMPTY_RETRY_MS)
-        if (originIsCommunity()) {
-            originReady = true
-            applyDiscourseLocale()
-            logger.info("LINUX DO origin ready after retry")
-        } else {
-            logger.info("LINUX DO origin is not the community shell")
-        }
+        return false
+    }
+
+    private fun originCanFetch(): Boolean {
+        val body = runInPageFetch(
+            LinuxDoUrls.absolute(LinuxDoUrls.sessionCsrf()),
+            timeoutSec = JcefFetchPolicy.ORIGIN_PROBE_TIMEOUT_SEC,
+        )
+        val flat = JcefFetchPolicy.flattenJson(body)
+        val extracted = runCatching { extractJson(flat) }.getOrDefault(flat)
+        return CloudflareChallenge.isExpectedPayload("https://linux.do/session/csrf", extracted)
     }
 
     private fun applyDiscourseLocale() {
@@ -304,21 +371,6 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(js, LinuxDoUrls.ORIGIN + "/", 0)
         }
-    }
-
-    private fun originIsCommunity(): Boolean {
-        val gen = jsGen.incrementAndGet()
-        val callback = query.inject("payload")
-        val js = """
-            var href=location.href;
-            var chrome=!!document.querySelector('#site-logo,.d-header,#main-outlet,#site-text-logo,.d-header-wrap,.topic-list,.login-button');
-            var text=(document.body&&document.body.innerText)?document.body.innerText.slice(0,400):'';
-            var flag=chrome?'ready':'wait';
-            var payload='$gen|'+flag+'::'+href+'::'+text;
-            $callback
-        """.trimIndent()
-        val probe = CloudflareChallenge.parsePageProbe(awaitJs(js, 6, gen))
-        return CloudflareChallenge.isCommunityShell(probe.url, probe.ready, probe.text)
     }
 
     private fun fetchInPage(url: String, retriedChallenge: Boolean = false): String {
@@ -333,13 +385,18 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
             }
             val challenge = JcefFetchPolicy.needsChallengeDialog(body) ||
                 JcefFetchPolicy.needsChallengeDialog(extracted)
-            if ((challenge || extracted.isBlank()) && attempt < JcefFetchPolicy.EMPTY_RETRY) {
+            if (challenge) {
+                if (!retriedChallenge) {
+                    logger.info("Challenge on $url; recovering origin")
+                    originReady = false
+                    throw ChallengeRequired()
+                }
+                logger.warn("Challenge HTML still on $url after the dialog")
+                throw IllegalStateException("无法加载")
+            }
+            if (extracted.isBlank() && attempt < JcefFetchPolicy.EMPTY_RETRY) {
                 logger.info("Unusable payload on $url (attempt ${attempt + 1}); retrying")
                 Thread.sleep(JcefFetchPolicy.EMPTY_RETRY_MS)
-            } else if (challenge && !retriedChallenge) {
-                logger.info("Challenge on $url; recovering origin")
-                originReady = false
-                throw ChallengeRequired()
             } else {
                 logger.warn("Unexpected LINUX DO payload for $url (${extracted.length} chars): ${extracted.take(160)}")
                 throw IllegalStateException("无法加载")
@@ -348,18 +405,89 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
         throw IllegalStateException("无法加载")
     }
 
-    private fun runInPageFetch(url: String): String {
+    private fun runInPageDelete(url: String, headers: Map<String, String>): String {
         val gen = jsGen.incrementAndGet()
         val callback = query.inject("payload")
         val target = escapeJs(url)
+        val headerJs = headers.entries.joinToString(",") { (key, value) ->
+            "'${escapeJs(key)}':'${escapeJs(value)}'"
+        }
         val js = """
-            fetch('$target',{credentials:'include',headers:{'Accept-Language':'${JcefFetchPolicy.ACCEPT_LANGUAGE}'}})
+            fetch('$target',{
+              method:'DELETE',
+              credentials:'include',
+              headers:{${JcefFetchPolicy.JSON_FETCH_HEADERS_JS}${if (headerJs.isBlank()) "" else ",$headerJs"}}
+            })
               .then(function(r){return r.text();})
               .then(function(text){ var payload='$gen|'+String(text).replace(/[\r\n]+/g,' '); $callback })
               .catch(function(){ var payload='$gen|'; $callback });
         """.trimIndent()
         return awaitJs(js, 15, gen, abortBus = false)
     }
+
+    private fun runInPageFetch(url: String, timeoutSec: Long = 15): String {
+        val gen = jsGen.incrementAndGet()
+        val callback = query.inject("payload")
+        val target = escapeJs(url)
+        val js = if (JcefFetchPolicy.isSiteJson(url)) {
+            compactSiteFetchJs(gen, target, callback)
+        } else {
+            """
+            fetch('$target',{credentials:'include',headers:{${JcefFetchPolicy.JSON_FETCH_HEADERS_JS}}})
+              .then(function(r){return r.text();})
+              .then(function(text){ var payload='$gen|'+String(text).replace(/[\r\n]+/g,' '); $callback })
+              .catch(function(){ var payload='$gen|'; $callback });
+            """.trimIndent()
+        }
+        val wait = if (JcefFetchPolicy.isSiteJson(url)) JcefFetchPolicy.SITE_FETCH_TIMEOUT_SEC else timeoutSec
+        return awaitJs(js, wait, gen, abortBus = false)
+    }
+
+    /**
+     * Full LINUX DO `/site.json` is megabytes (emoji, settings, theme). Pushing it
+     * through JBCefJSQuery truncates or fails, so Home fell back to
+     * `/categories.json` without trust-gated children. Slim in-page to the
+     * catalog fields Fluxdo reads.
+     */
+    private fun compactSiteFetchJs(gen: Int, target: String, callback: String): String =
+        """
+        fetch('$target',{credentials:'include',headers:{${JcefFetchPolicy.JSON_FETCH_HEADERS_JS}}})
+          .then(function(r){return r.json();})
+          .then(function(s){
+            function pick(c){
+              var cf=c.custom_fields||{};
+              return {
+                id:c.id,
+                name:c.name,
+                slug:c.slug,
+                color:c.color,
+                icon:c.icon,
+                topic_count:c.topic_count,
+                read_restricted:c.read_restricted,
+                parent_category_id:c.parent_category_id,
+                description:c.description,
+                description_text:c.description_text,
+                min_trust_level:c.min_trust_level,
+                minimum_trust_level:c.minimum_trust_level,
+                required_minimum_trust_level:c.required_minimum_trust_level,
+                custom_fields:{
+                  min_trust_level:cf.min_trust_level,
+                  minimum_trust_level:cf.minimum_trust_level,
+                  required_trust_level:cf.required_trust_level
+                }
+              };
+            }
+            var slim={
+              default_archetype:s.default_archetype,
+              long_polling_base_url:s.long_polling_base_url,
+              user_fields:s.user_fields||[],
+              categories:(s.categories||[]).map(pick)
+            };
+            var payload='$gen|'+JSON.stringify(slim);
+            $callback
+          })
+          .catch(function(){ var payload='$gen|'; $callback });
+        """.trimIndent()
 
     private fun runInPagePostStream(
         url: String,
@@ -607,10 +735,23 @@ class JcefLinuxDoJsonFetcher : LinuxDoJsonFetcher, LinuxDoMediaLoader, AutoClose
     }
 
     private fun completeViaChallenge() {
+        if (SignInCoordinator.isDialogOpen()) {
+            logger.info("Deferring challenge dialog; sign-in already shows LINUX DO")
+            SignInCoordinator.waitWhileOpen()
+            originReady = false
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (!JcefChallengePolicy.shouldOpenDialog(false, lastChallengeOkAt, now)) {
+            logger.info("Skipping challenge dialog; recently completed")
+            originReady = false
+            return
+        }
         val locale = runCatching { service<IntelliDoRuntime>().locale }.getOrDefault(java.util.Locale.SIMPLIFIED_CHINESE)
         logger.info("Opening Cloudflare challenge dialog")
         try {
-            JcefChallengeDialog(browser.jbCefClient, locale).awaitPassed()
+            JcefChallengeDialog.awaitPassed(browser.jbCefClient, locale)
+            JcefLinuxDoCookies.flush()
             logger.info("Challenge dialog completed")
         } catch (error: Exception) {
             logger.warn("Challenge dialog ended: ${error.message}")

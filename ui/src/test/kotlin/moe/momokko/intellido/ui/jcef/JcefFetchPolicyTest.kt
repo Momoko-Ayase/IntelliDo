@@ -24,4 +24,17 @@ class JcefFetchPolicyTest {
         assertEquals('{', flat.first())
         assertEquals('}', flat.last())
     }
+
+    @Test
+    fun `origin is ready after the document, not the full Ember asset waterfall`() {
+        assertTrue(JcefFetchPolicy.ORIGIN_SETTLE_MS <= 80)
+        assertTrue(JcefFetchPolicy.ORIGIN_LOAD_TIMEOUT_SEC <= 10L)
+        assertTrue(JcefFetchPolicy.ORIGIN_PROBE_TIMEOUT_SEC <= 2L)
+        assertEquals(1, JcefFetchPolicy.ORIGIN_PROBES)
+        assertTrue(JcefFetchPolicy.JSON_FETCH_HEADERS_JS.contains("application/json"))
+        assertTrue(JcefFetchPolicy.JSON_FETCH_HEADERS_JS.contains("X-Requested-With"))
+        assertFalse(JcefFetchPolicy.JSON_FETCH_HEADERS_JS.contains("IntelliDo"))
+        assertTrue(JcefFetchPolicy.isSiteJson("https://linux.do/site.json"))
+        assertFalse(JcefFetchPolicy.isSiteJson("https://linux.do/latest.json"))
+    }
 }

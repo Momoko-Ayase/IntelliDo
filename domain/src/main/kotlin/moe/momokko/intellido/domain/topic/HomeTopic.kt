@@ -28,6 +28,7 @@ data class HomeTopic(
     val acceptedAnswer: Boolean = false,
     val wordCount: Int = 0,
     val createdAt: Instant? = null,
+    val categoryRestricted: Boolean = false,
 ) {
     init {
         require(id > 0) { "topic id must be positive" }

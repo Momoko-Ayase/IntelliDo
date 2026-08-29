@@ -66,6 +66,11 @@ class IntelliDoWorkspaceLayoutTest {
         assertTrue(text.contains("CommunityNavToolWindowFactory"))
         assertTrue(text.contains("IntelliDoActionConfigurationCustomizer"))
         assertTrue(text.contains("IntelliDoMenuSurfaceCustomizer"))
+        assertTrue(text.contains("intellido.signIn"))
+        assertTrue(text.contains("intellido.signOut"))
+        assertTrue(text.contains("intellido.account"))
+        assertTrue(text.contains("MainToolbarRight"))
+        assertTrue(text.contains("SearchEverywhere"))
     }
 
     @Test

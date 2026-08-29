@@ -9,9 +9,12 @@ import moe.momokko.intellido.browser.JcefDiagnostics
 import moe.momokko.intellido.browser.JcefRuntimeProbe
 import moe.momokko.intellido.browser.JcefStartupDecision
 import moe.momokko.intellido.browser.JcefStartupGate
+import moe.momokko.intellido.domain.session.MemberSession
 import moe.momokko.intellido.platform.i18n.FileLocalPreferenceStore
 import moe.momokko.intellido.platform.i18n.IntelliDoLocale
 import moe.momokko.intellido.platform.identity.ProductIdentity
+import moe.momokko.intellido.ui.session.PasswordSafeRememberedSessionStore
+import moe.momokko.intellido.ui.session.SignInCoordinator
 import moe.momokko.intellido.platform.instance.ApplicationInstanceCoordinator
 import moe.momokko.intellido.platform.instance.InstanceAcquireResult
 import moe.momokko.intellido.platform.instance.LaunchTargets
@@ -62,7 +65,14 @@ object IntelliDoStartup {
             .getOrNull()
         if (acquire == null) {
             val runtime = service<IntelliDoRuntime>()
-            runtime.initialize(identity, locale, null, preferences, coordinator)
+            runtime.initialize(
+                identity,
+                locale,
+                null,
+                preferences,
+                coordinator,
+                PasswordSafeRememberedSessionStore(),
+            )
             IdeSurfaceApplicator.applyApplicationSurface()
             return true
         }
@@ -85,7 +95,14 @@ object IntelliDoStartup {
             }
             is InstanceAcquireResult.Acquired -> {
                 val runtime = service<IntelliDoRuntime>()
-                runtime.initialize(identity, locale, acquire.lock, preferences, coordinator)
+                runtime.initialize(
+                    identity,
+                    locale,
+                    acquire.lock,
+                    preferences,
+                    coordinator,
+                    PasswordSafeRememberedSessionStore(),
+                )
                 runtime.startHandoffWatcher()
                 IdeSurfaceApplicator.applyApplicationSurface()
                 true
@@ -99,10 +116,27 @@ object IntelliDoStartup {
             IntelliDoWorkspace.openOrFocus()
             return
         }
+        val app = ApplicationManager.getApplication()
+        if (app.isDispatchThread) {
+            app.executeOnPooledThread {
+                val remembered = !runtime.remembered.username().isNullOrBlank()
+                app.invokeLater { presentWithProfile(probe, runtime, remembered) }
+            }
+            return
+        }
+        presentWithProfile(probe, runtime, !runtime.remembered.username().isNullOrBlank())
+    }
+
+    private fun presentWithProfile(
+        probe: JcefRuntimeProbe,
+        runtime: IntelliDoRuntime,
+        remembered: Boolean,
+    ) {
         try {
-            val profile = IsolatedBrowserProfiles.prepareAnonymous(
+            val profile = IsolatedBrowserProfiles.prepare(
                 Path(PathManager.getSystemPath()),
                 runtime.identity.channel,
+                remembered,
             )
             runtime.attachBrowserProfile(profile)
             val decision = JcefStartupGate(
@@ -113,6 +147,9 @@ object IntelliDoStartup {
             ).decide()
             when (decision) {
                 JcefStartupDecision.ContinueWithJcef -> {
+                    if (!remembered) {
+                        moe.momokko.intellido.ui.jcef.JcefLinuxDoCookies.stripDiscourseSession()
+                    }
                     if (!runtime.preferFakeTransport()) {
                         runtime.attachLiveCommunity(moe.momokko.intellido.ui.jcef.JcefLinuxDoJsonFetcher())
                         logger.info("Guest mode using JCEF transport to https://linux.do")
@@ -120,10 +157,14 @@ object IntelliDoStartup {
                         logger.info("Guest mode using local Fake LINUX DO")
                     }
                     logger.info("JCEF available with isolated profile; opening IntelliJ workspace with Home tab")
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        runtime.ensureMemberSession()
+                    }
                     val project = IntelliDoWorkspace.openOrFocus()
                     if (project == null) {
                         logger.warn("IntelliDo workspace did not open")
                     }
+                    restoreSession(runtime, project, remembered)
                 }
                 is JcefStartupDecision.ShowRecovery -> {
                     runtime.lastJcefDiagnostics = decision.diagnostics
@@ -147,4 +188,21 @@ object IntelliDoStartup {
 
     fun preferenceFile(): Path =
         Path(System.getProperty("user.home"), ".intellido", "application.properties")
+
+    private fun restoreSession(
+        runtime: IntelliDoRuntime,
+        project: com.intellij.openapi.project.Project?,
+        remembered: Boolean,
+    ) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            runtime.awaitCommunity()
+            runtime.ensureMemberSession()
+            if (!remembered || runtime.session is MemberSession.SignedIn || runtime.suppressAutoReauth) {
+                return@executeOnPooledThread
+            }
+            ApplicationManager.getApplication().invokeLater {
+                SignInCoordinator.offerExpiredReauth(project)
+            }
+        }
+    }
 }

@@ -23,12 +23,15 @@ object CloudflareChallenge {
         "\"badges\"",
         "\"groups\"",
         "\"errors\"",
+        "\"current_user\"",
+        "\"csrf\"",
     )
 
     data class PageProbe(
         val url: String,
         val ready: Boolean,
         val turnstile: Boolean,
+        val passed: Boolean = false,
         val text: String,
     )
 
@@ -40,22 +43,44 @@ object CloudflareChallenge {
             val flag = parts[0].trim().lowercase()
             return PageProbe(
                 url = parts[1].trim(),
-                ready = flag == "ready",
+                ready = flag == "ready" || flag == "passed",
                 turnstile = flag == "turnstile",
+                passed = flag == "passed",
                 text = parts.getOrNull(2).orEmpty(),
             )
         }
-        return PageProbe(payload.trim().substringBefore('\n'), ready = false, turnstile = false, text = "")
+        return PageProbe(
+            payload.trim().substringBefore('\n'),
+            ready = false,
+            turnstile = false,
+            passed = false,
+            text = "",
+        )
     }
 
     fun isChallengeUrl(url: String): Boolean {
         val lower = url.lowercase()
-        return "cdn-cgi" in lower || "/challenge" in lower
+        return "cdn-cgi" in lower || "challenges.cloudflare.com" in lower
     }
 
     fun isChallenge(httpStatus: Int, body: String): Boolean {
+        if (hasActiveChallenge(body)) {
+            return true
+        }
         val lower = body.lowercase()
         return MARKERS.any { it in lower }
+    }
+
+    /**
+     * Fluxdo: cf_chl_opt / challenge-running are the live-shield markers.
+     * A logo on the interstitial is not a pass.
+     */
+    fun hasActiveChallenge(html: String): Boolean {
+        val raw = html.lowercase()
+        return "cf_chl_opt" in raw ||
+            "challenge-running" in raw ||
+            "challenge-stage" in raw ||
+            ("challenge-platform" in raw && "cloudflare" in raw)
     }
 
     fun isLinuxDoHost(url: String): Boolean {
@@ -64,37 +89,57 @@ object CloudflareChallenge {
     }
 
     fun isCommunityShell(url: String, ready: Boolean, text: String = ""): Boolean =
-        !isChallengeUrl(url) && isLinuxDoHost(url) && (ready || looksLikePassedHome(text))
+        !isChallengeUrl(url) &&
+            isLinuxDoHost(url) &&
+            !hasActiveChallenge(text) &&
+            (ready || looksLikePassedHome(text))
 
     fun looksLikePassedHome(text: String): Boolean {
-        if (text.isBlank() || isChallenge(200, text)) {
+        if (text.isBlank() || isChallenge(200, text) || hasActiveChallenge(text)) {
             return false
         }
         val home = "Latest" in text || "最新" in text ||
-            "Log In" in text || "登录" in text ||
             "社区准则" in text || "真诚" in text ||
-            "LINUX DO" in text || "Where possible" in text
+            "Where possible" in text
         return text.length >= 8 && home
     }
 
     /**
-     * LINUX DO's interstitial is a logo plus Turnstile. Close as soon as the real
-     * site is visible. Leftover hidden Turnstile iframes must not keep the dialog open.
+     * Close only when LINUX DO actually answered JSON. Fluxdo uses the same bar:
+     * API success, not `#site-text-logo` / Ember chrome. The CF interstitial on
+     * linux.do ships the community logo, so treating `ready` as a pass closed the
+     * dialog before Turnstile finished.
+     *
+     * A leftover `cf_clearance` cookie is not a pass (Fluxdo snapshots the old
+     * value and ignores it).
      */
-    fun dialogMayClose(probe: PageProbe, sawTurnstile: Boolean): Boolean {
-        if (isChallengeUrl(probe.url) || !isLinuxDoHost(probe.url)) {
+    fun dialogMayClose(probe: PageProbe): Boolean {
+        if (isChallengeUrl(probe.url) || probe.turnstile) {
             return false
         }
-        if (probe.ready || looksLikePassedHome(probe.text)) {
-            return true
-        }
-        if (probe.turnstile) {
+        if (hasActiveChallenge(probe.text)) {
             return false
         }
-        return sawTurnstile
+        if (probe.url.isNotBlank() && !isLinuxDoHost(probe.url)) {
+            return false
+        }
+        return isCsrfPassPayload(probe.text) || isTopicListPassPayload(probe.text)
     }
 
-    private val FLAGS: Set<String> = setOf("ready", "wait", "turnstile")
+    fun isCsrfPassPayload(text: String): Boolean {
+        val trimmed = text.trim()
+        if (!trimmed.startsWith("{") || hasActiveChallenge(trimmed)) {
+            return false
+        }
+        return "\"csrf\"" in trimmed
+    }
+
+    fun isTopicListPassPayload(text: String): Boolean {
+        val trimmed = text.trim()
+        return trimmed.startsWith("{") && "\"topic_list\"" in trimmed && looksLikeCommunityJson(trimmed)
+    }
+
+    private val FLAGS: Set<String> = setOf("ready", "wait", "turnstile", "passed")
 
     fun looksLikeCommunityJson(body: String): Boolean {
         val trimmed = body.trim()
@@ -127,6 +172,8 @@ object CloudflareChallenge {
             u.contains("/about.json") -> "\"about\"" in json
             u.contains("/directory_items") -> "\"directory_items\"" in json
             u.contains("/search.json") -> "\"topics\"" in json || "\"posts\"" in json
+            u.contains("/session/current") -> "\"current_user\"" in json || "\"errors\"" in json
+            u.contains("/session/csrf") -> "\"csrf\"" in json
             else -> looksLikeCommunityJson(json)
         }
     }

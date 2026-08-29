@@ -29,6 +29,7 @@ class CloudflareChallengeTest {
         assertFalse(CloudflareChallenge.isChallenge(200, "<html><script src=\"challenge-platform\"></script></html>"))
         assertTrue(CloudflareChallenge.isChallengeUrl("https://linux.do/cdn-cgi/challenge-platform/h/g/turnstile"))
         assertFalse(CloudflareChallenge.isChallengeUrl("https://linux.do/latest.json"))
+        assertFalse(CloudflareChallenge.isChallengeUrl("https://linux.do/challenge"))
     }
 
     @Test
@@ -60,42 +61,66 @@ class CloudflareChallengeTest {
     }
 
     @Test
-    fun `dialog closes when turnstile disappears without waiting for community chrome`() {
+    fun `dialog stays open until csrf or topic list json arrives`() {
         val widget = CloudflareChallenge.parsePageProbe("turnstile::https://linux.do/::确认您是真人")
         assertTrue(widget.turnstile)
-        assertFalse(CloudflareChallenge.dialogMayClose(widget, sawTurnstile = false))
-        assertFalse(CloudflareChallenge.dialogMayClose(widget, sawTurnstile = true))
+        assertFalse(CloudflareChallenge.dialogMayClose(widget))
 
         val blank = CloudflareChallenge.parsePageProbe("wait::https://linux.do/::")
-        assertFalse(CloudflareChallenge.dialogMayClose(blank, sawTurnstile = false))
-        assertTrue(CloudflareChallenge.dialogMayClose(blank, sawTurnstile = true))
+        assertFalse(CloudflareChallenge.dialogMayClose(blank))
 
-        val home = CloudflareChallenge.parsePageProbe("ready::https://linux.do/::最新")
-        assertTrue(CloudflareChallenge.dialogMayClose(home, sawTurnstile = false))
+        val logo = CloudflareChallenge.parsePageProbe("ready::https://linux.do/::最新")
+        assertTrue(logo.ready)
+        assertFalse(CloudflareChallenge.dialogMayClose(logo))
+        val passed = CloudflareChallenge.parsePageProbe("passed::https://linux.do/::{\"csrf\":\"token\"}")
+        assertTrue(passed.passed)
+        assertTrue(CloudflareChallenge.dialogMayClose(passed))
+        assertTrue(
+            CloudflareChallenge.dialogMayClose(
+                CloudflareChallenge.parsePageProbe("passed::https://linux.do/::{\"topic_list\":{}}"),
+            ),
+        )
         assertFalse(
             CloudflareChallenge.dialogMayClose(
                 CloudflareChallenge.parsePageProbe("wait::https://linux.do/cdn-cgi/challenge::"),
-                sawTurnstile = true,
             ),
         )
     }
 
     @Test
-    fun `homepage copy closes the dialog even if selectors miss`() {
-        val text = "LINUX DO\nLog In\nLatest\n真诚、友善、团结、专业，共建你我引以为荣之社区。《社区准则》\n佬友七夕快乐"
+    fun `homepage chrome and leftover clearance are not a pass`() {
+        val text = "LINUX DO\nLatest\n真诚、友善、团结、专业，共建你我引以为荣之社区。《社区准则》\n佬友七夕快乐"
         val probe = CloudflareChallenge.parsePageProbe("wait::https://linux.do/::$text")
         assertFalse(probe.ready)
         assertTrue(CloudflareChallenge.looksLikePassedHome(text))
-        assertTrue(CloudflareChallenge.dialogMayClose(probe, sawTurnstile = false))
-        assertTrue(CloudflareChallenge.looksLikePassedHome("LINUX DO 登录"))
-        assertTrue(
+        assertFalse(CloudflareChallenge.dialogMayClose(probe))
+        assertFalse(CloudflareChallenge.looksLikePassedHome("LINUX DO 登录"))
+        assertFalse(
             CloudflareChallenge.dialogMayClose(
                 CloudflareChallenge.parsePageProbe("wait::https://linux.do/::LINUX DO 登录"),
-                sawTurnstile = false,
             ),
         )
         val leftover = CloudflareChallenge.parsePageProbe("turnstile::https://linux.do/::$text")
-        assertTrue(CloudflareChallenge.dialogMayClose(leftover, sawTurnstile = true))
+        assertFalse(CloudflareChallenge.dialogMayClose(leftover))
+        assertFalse(CloudflareChallenge.isCsrfPassPayload("Just a moment... csrf challenge {"))
+        assertTrue(CloudflareChallenge.isCsrfPassPayload("""{"csrf":"x"}"""))
+        assertTrue(
+            CloudflareChallenge.dialogMayClose(
+                CloudflareChallenge.parsePageProbe("passed::https://linux.do/::{\"csrf\":\"x\"}"),
+            ),
+        )
+    }
+
+    @Test
+    fun `cf_chl_opt keeps the interstitial from counting as the community shell`() {
+        assertTrue(CloudflareChallenge.hasActiveChallenge("<script>window.cf_chl_opt={}</script>"))
+        assertFalse(
+            CloudflareChallenge.isCommunityShell(
+                "https://linux.do/",
+                ready = true,
+                text = "<html id=\"site-logo\">cf_chl_opt</html>",
+            ),
+        )
     }
 
     @Test
@@ -131,6 +156,28 @@ class CloudflareChallengeTest {
             CloudflareChallenge.isExpectedPayload(
                 "https://linux.do/message-bus/cafef00d/poll",
                 "<html>Just a moment...</html>",
+            ),
+        )
+    }
+
+    @Test
+    fun `session current json is an expected payload`() {
+        assertTrue(
+            CloudflareChallenge.isExpectedPayload(
+                "https://linux.do/session/current.json",
+                """{"current_user":{"username":"helper"}}""",
+            ),
+        )
+        assertTrue(
+            CloudflareChallenge.isExpectedPayload(
+                "https://linux.do/session/current.json",
+                """{"current_user":null}""",
+            ),
+        )
+        assertTrue(
+            CloudflareChallenge.isExpectedPayload(
+                "https://linux.do/session/csrf",
+                """{"csrf":"token"}""",
             ),
         )
     }

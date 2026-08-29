@@ -72,18 +72,78 @@ class BridgedLinuxDoCommunityClientTest {
     }
 
     @Test
-    fun `categories json is enough without waiting for site json`() {
+    fun `categories json still works when site json is missing`() {
         val paths = mutableListOf<String>()
         val client = BridgedLinuxDoCommunityClient { path ->
             paths += path
             when {
                 path.startsWith("/categories.json") -> resource("discourse/categories.json")
-                path.startsWith("/site.json") -> error("site.json should not block Home")
+                path.startsWith("/site.json") -> error("site.json unavailable")
                 else -> error("unexpected path $path")
             }
         }
         assertEquals("公告", client.loadCategories().first().name)
-        assertTrue(paths.none { it.contains("site.json") })
+        assertTrue(paths.any { it.contains("categories.json") })
+    }
+
+    @Test
+    fun `site json restricted subcategories name Home chips`() {
+        val client = BridgedLinuxDoCommunityClient { path ->
+            when {
+                path.startsWith("/site.json") -> """
+                    {
+                      "default_archetype": "regular",
+                      "categories": [
+                        {
+                          "id": 42,
+                          "name": "搞七捻三",
+                          "slug": "gossip",
+                          "topic_count": 8,
+                          "read_restricted": false,
+                          "color": "43A047",
+                          "icon": "droplet"
+                        },
+                        {
+                          "id": 421,
+                          "name": "搞七捻三, Lv1",
+                          "slug": "gossip-lv1",
+                          "topic_count": 3,
+                          "read_restricted": true,
+                          "parent_category_id": 42
+                        }
+                      ]
+                    }
+                """.trimIndent()
+                path.startsWith("/categories.json") -> """{"category_list":{"categories":[]}}"""
+                path.startsWith("/latest.json") -> """
+                    {
+                      "users": [{ "id": 22, "username": "helper" }],
+                      "topic_list": {
+                        "topics": [
+                          {
+                            "id": 501,
+                            "title": "手头的 token 有点多",
+                            "slug": "tokens",
+                            "posts_count": 1,
+                            "reply_count": 0,
+                            "last_posted_at": "2026-08-29T00:00:00.000Z",
+                            "category_id": 421,
+                            "tags": ["人工智能"],
+                            "posters": [{ "user_id": 22 }]
+                          }
+                        ]
+                      }
+                    }
+                """.trimIndent()
+                else -> error("unexpected path $path")
+            }
+        }
+        val topic = client.loadHomeTopics().single()
+        assertEquals("搞七捻三, Lv1", topic.categoryName)
+        assertEquals(true, topic.categoryRestricted)
+        assertEquals("droplet", topic.categoryIcon)
+        assertEquals("43A047", topic.categoryColor)
+        assertEquals(listOf("人工智能"), topic.tags)
     }
 
     @Test
@@ -98,6 +158,21 @@ class BridgedLinuxDoCommunityClientTest {
         val topics = client.loadHomeTopics()
         assertEquals(2, topics.size)
         assertEquals("欢迎使用 IntelliDo", topics.first().title)
+    }
+
+    @Test
+    fun `bridged client maps session current without contacting linux do`() {
+        val client = BridgedLinuxDoCommunityClient { path ->
+            when {
+                path.startsWith("/session/current.json") -> resource("discourse/session-current.json")
+                path.startsWith("/categories.json") -> resource("discourse/categories.json")
+                path.startsWith("/topics/created-by/helper.json") -> resource("discourse/latest.json")
+                else -> error("unexpected path $path")
+            }
+        }
+        val session = client.loadCurrentSession() as moe.momokko.intellido.domain.session.MemberSession.SignedIn
+        assertEquals("helper", session.username)
+        assertEquals("欢迎使用 IntelliDo", client.loadCreatedTopics("helper").first().title)
     }
 
     private fun resource(path: String): String =

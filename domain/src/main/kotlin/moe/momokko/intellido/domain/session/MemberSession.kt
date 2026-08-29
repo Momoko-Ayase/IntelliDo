@@ -1,5 +1,7 @@
 package moe.momokko.intellido.domain.session
 
+import moe.momokko.intellido.domain.topic.LinuxDoAvatar
+
 /**
  * IntelliDo models exactly one LINUX DO identity. Until sign-in succeeds the
  * session is anonymous: public read-only browsing with no account tools.
@@ -10,11 +12,19 @@ sealed class MemberSession {
     data class SignedIn(
         val username: String,
         val trustLevel: Int,
+        val id: Long? = null,
+        val name: String? = null,
+        val avatarTemplate: String? = null,
     ) : MemberSession() {
         init {
             require(username.isNotBlank()) { "username must not be blank" }
             require(trustLevel in 0..4) { "trustLevel must be 0-4" }
+            require(id == null || id > 0) { "id must be positive when present" }
         }
+
+        fun avatarUrl(size: Int = 48): String? = LinuxDoAvatar.url(avatarTemplate, size)
+
+        fun displayLabel(): String = name?.takeIf { it.isNotBlank() } ?: username
     }
 }
 

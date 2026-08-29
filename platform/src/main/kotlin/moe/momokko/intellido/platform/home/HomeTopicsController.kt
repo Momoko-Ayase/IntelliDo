@@ -14,6 +14,7 @@ class HomeTopicsController(
     private var more: Boolean = true
     private var categoryId: Long = 0
     private var tagName: String = ""
+    private var createdBy: String = ""
 
     fun load(): List<HomeTopic> = replace(Kind.Latest) { client.loadHomeTopics(0) }
 
@@ -29,6 +30,11 @@ class HomeTopicsController(
     fun loadTag(name: String): List<HomeTopic> {
         tagName = name
         return replace(Kind.Tag) { client.loadTagTopics(name, 0) }
+    }
+
+    fun loadCreatedBy(username: String): List<HomeTopic> {
+        createdBy = username.trim()
+        return replace(Kind.CreatedBy) { client.loadCreatedTopics(createdBy, 0) }
     }
 
     fun search(query: String): List<HomeTopic> {
@@ -54,6 +60,7 @@ class HomeTopicsController(
             Kind.Top -> client.loadTopTopics(page + 1)
             Kind.Category -> client.loadCategoryTopics(categoryId, page + 1)
             Kind.Tag -> client.loadTagTopics(tagName, page + 1)
+            Kind.CreatedBy -> client.loadCreatedTopics(createdBy, page + 1)
             Kind.Search -> emptyList()
         }
         if (extra.isEmpty()) {
@@ -95,5 +102,5 @@ class HomeTopicsController(
         return topics
     }
 
-    private enum class Kind { Latest, Hot, Top, Category, Tag, Search }
+    private enum class Kind { Latest, Hot, Top, Category, Tag, CreatedBy, Search }
 }
